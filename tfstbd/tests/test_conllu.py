@@ -12,7 +12,7 @@ from ..conllu import extract_tokens, extract_text, split_sent, repair_spaces
 
 
 class TestMeaningTokens(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         source = parse('\n'.join([
             u'1     Er           er           PRON    …   _',
             u'2     arbeitet     arbeiten     VERB    …   _',
@@ -26,7 +26,7 @@ class TestMeaningTokens(unittest.TestCase):
 
 
 class TestDecodeSpace(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         self.assertEqual('\n', decode_space('\n'))
         self.assertEqual('\n', decode_space(r'\n'))
         self.assertEqual(u'\xa0', decode_space(u'\xa0'))
@@ -36,7 +36,7 @@ class TestDecodeSpace(unittest.TestCase):
 
 
 class TestEncodeSpace(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         self.assertEqual(r'\n', encode_space('\n'))
         self.assertEqual(r'\n', encode_space(r'\n'))
         self.assertEqual(r'\xa0', encode_space(u'\xa0'))
@@ -46,16 +46,16 @@ class TestEncodeSpace(unittest.TestCase):
 
 
 class TestExtractSpace(unittest.TestCase):
-    def testNone(self):
+    def test_none(self):
         self.assertEqual(' ', extract_space(OrderedDict()))
         self.assertEqual(' ', extract_space(OrderedDict({'misc': None})))
 
-    def testSpaceAfter(self):
+    def test_space_after(self):
         self.assertEqual('', extract_space(OrderedDict({'misc': OrderedDict({'SpaceAfter': 'No'})})))
         self.assertEqual('', extract_space(
             OrderedDict({'misc': OrderedDict({'SpaceAfter': 'No', 'SpacesAfter': '  '})})))
 
-    def testSpacesAfter(self):
+    def test_spaces_after(self):
         self.assertEqual('\n', extract_space(OrderedDict({'misc': OrderedDict({'SpacesAfter': '\n'})})))
         self.assertEqual('\n', extract_space(OrderedDict({'misc': OrderedDict({'SpacesAfter': '\\n'})})))
         self.assertEqual(u'\u00A0', extract_space(OrderedDict({'misc': OrderedDict({'SpacesAfter': '\u00A0'})})))
@@ -64,7 +64,7 @@ class TestExtractSpace(unittest.TestCase):
 
 
 class TestExtractTokens(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         content = [
             u'# newdoc id = doc1',
             u'# newpar id = par1',
@@ -81,7 +81,7 @@ class TestExtractTokens(unittest.TestCase):
         expected = [(u'Результаты', u' '), (u'(', u''), (u'нет', u' ')]
         self.assertListEqual(expected, tokens)
 
-    def testComplex(self):
+    def test_complex(self):
         content = [
             u'# sent_id = 2011Interviyu_Mariny_Astvatsaturyan.xml_11',
             u'# text = Тогда, \xa0как и сейчас, в качестве внештатного сотрудника.',
@@ -108,7 +108,7 @@ class TestExtractTokens(unittest.TestCase):
 
 
 class TestExtractText(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         data_dir = os.path.join(os.path.dirname(__file__), 'data')
         data_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.conllu')]
 
@@ -122,7 +122,7 @@ class TestExtractText(unittest.TestCase):
             if all([extract_space(t) is not None for t in s]):
                 extract_text(s)
 
-    def testComplex1(self):
+    def test_complex1(self):
         content = [
             u'# newdoc id = doc1',
             u'# newpar id = par1',
@@ -139,7 +139,7 @@ class TestExtractText(unittest.TestCase):
         expected = [u'Результаты', u' \xa0', u'(', u'\xa0 ', u'нет']
         self.assertListEqual(expected, tokens)
 
-    def testComplex2(self):
+    def test_complex2(self):
         content = [
             u'# sent_id = 2011Interviyu_Mariny_Astvatsaturyan.xml_11',
             u'# text = Тогда, как и сейчас, в качестве внештатного сотрудника.',
@@ -163,7 +163,7 @@ class TestExtractText(unittest.TestCase):
 
 
 class TestSplitSent(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         content = [
             u'# newdoc id = doc1',
             u'# newpar id = par1',
@@ -186,7 +186,7 @@ class TestSplitSent(unittest.TestCase):
         for e, r in zip(expected, result):
             self.assertListEqual(e, r)
 
-    def testComplex(self):
+    def test_complex(self):
         content = [
             u'# newdoc id = doc1',
             u'# newpar id = par1',
@@ -212,7 +212,7 @@ class TestSplitSent(unittest.TestCase):
 
 
 class TestRepairSpaces(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         data_dir = os.path.join(os.path.dirname(__file__), 'data')
         data_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.conllu')]
 
@@ -226,7 +226,7 @@ class TestRepairSpaces(unittest.TestCase):
             s = repair_spaces(s)
             extract_text(s)
 
-    def testComplex(self):
+    def test_complex(self):
         content = [
             u'# newdoc id = doc1',
             u'# newpar id = par1',
@@ -255,7 +255,7 @@ class TestRepairSpaces(unittest.TestCase):
         ]
         self.assertListEqual(expected, s.serialize().split('\n'))
 
-    def testLf(self):
+    def test_lf(self):
         content = [
             u'# newdoc id = doc1',
             u'# newpar id = par1',

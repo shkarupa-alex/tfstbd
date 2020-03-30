@@ -21,24 +21,19 @@ setup(
     entry_points={
         'console_scripts': [
             'tfstbd-convert=tfstbd.convert:main',
-            'tfstbd-check=tfstbd.check:main',
             'tfstbd-dataset=tfstbd.dataset:main',
-            'tfstbd-infer=tfstbd.infer:main',
-            'tfstbd-train=tfstbd.train:main',
+            'tfstbd-check=tfstbd.check:main',
             'tfstbd-vocab=tfstbd.vocab:main',
+            'tfstbd-train=tfstbd.train:main',
+            # 'tfstbd-infer=tfstbd.infer:main',
         ],
     },
     install_requires=[
-        # https://github.com/tensorflow/tensorflow/issues/7166
-        # 'tensorflow>=2.0.0-alpha0',
-        'tfmiss>=0.1.0',
+        'tensorflow>=2.1.0',
+        'tfmiss>=0.2.0',
         'nlpvocab>=1.1.5',
         'conllu>=1.2.1',
     ],
-    extras_require={
-        'tf_cpu': ['tensorflow>=2.0.0-alpha0'],
-        'tf_gpu': ['tensorflow-gpu>=2.0.0-alpha0'],
-    },
     test_suite='nose.collector',
-    tests_require=['nose']
+    tests_require=['nose', 'ufal.udpipe>=1.2.0.1']
 )

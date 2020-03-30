@@ -12,7 +12,7 @@ from ..convert import parse_paragraphs, split_convert
 
 
 class TestParseParagraphs(unittest.TestCase):
-    def testNormal(self):
+    def test_normal(self):
         result = parse_paragraphs(
             [
                 u'Тест.'
@@ -31,7 +31,7 @@ class TestParseParagraphs(unittest.TestCase):
             u''
         ], ''.join(result).split('\n'))
 
-    def testComplex(self):
+    def test_complex(self):
         result = parse_paragraphs(
             [
                 u'Тест, тест. Тест,\tтест',
@@ -80,7 +80,7 @@ class TestParseParagraphs(unittest.TestCase):
             u'',
         ], ''.join(result).split('\n'))
 
-    def testLF(self):
+    def test_lf(self):
         result = parse_paragraphs(
             [
                 u'Как на масленой неделе␊Из трубы блины летели!␊\nС пылу, с жару, из печи, ␊Все румяны, горячи!␊'
@@ -132,7 +132,7 @@ class TestSplitConvert(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def testNormal(self):
+    def test_normal(self):
         tokenizer_model = os.path.join(os.path.dirname(__file__), 'data', 'udpipe.model')
         source_file = os.path.join(os.path.dirname(__file__), 'data', 'sentencies_source.txt')
         split_convert(source_file, tokenizer_model, self.temp_dir, 0.5)

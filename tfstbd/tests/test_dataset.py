@@ -16,7 +16,7 @@ from ..input import _parse_example
 
 
 class TestParseConllu(unittest.TestCase):
-    def testParseParagraphs(self):
+    def test_parse_paragraphs(self):
         result = parse_paragraphs(os.path.join(os.path.dirname(__file__), 'data', 'dataset_paragraphs.conllu'), 1.0)
         self.assertEqual([
             ([
@@ -41,7 +41,7 @@ class TestParseConllu(unittest.TestCase):
              ], 1.0)
         ], result)
 
-    def testParsePlain(self):
+    def test_parse_plain(self):
         result = parse_paragraphs(os.path.join(os.path.dirname(__file__), 'data', 'dataset_plain.conllu'), 1.0)
         self.assertEqual([
             ([
@@ -58,7 +58,7 @@ class TestParseConllu(unittest.TestCase):
              ], 1.0),
         ], result)
 
-    def testParseUdpipe(self):
+    def test_parse_udpipe(self):
         result = parse_paragraphs(os.path.join(os.path.dirname(__file__), 'data', 'dataset_udpipe.conllu'), 1.0)
         self.assertEqual([
             ([
@@ -76,7 +76,7 @@ class TestParseConllu(unittest.TestCase):
              ], 1.0),
         ], result)
 
-    def testParseCollapse(self):
+    def test_parse_collapse(self):
         result = parse_paragraphs(os.path.join(os.path.dirname(__file__), 'data', 'dataset_collapse.conllu'), 1.0)
         self.assertEqual([
             ([
@@ -86,7 +86,7 @@ class TestParseConllu(unittest.TestCase):
              ], 1.0),
         ], result)
 
-    def testParseSpace(self):
+    def test_parse_space(self):
         result = parse_paragraphs(os.path.join(os.path.dirname(__file__), 'data', 'dataset_space.conllu'), 1.0)
         self.assertEqual([
             ([
@@ -98,11 +98,11 @@ class TestParseConllu(unittest.TestCase):
              ], 1.0)
         ], result)
 
-    def testParseDuplicates(self):
+    def test_parse_duplicates(self):
         result = parse_paragraphs(os.path.join(os.path.dirname(__file__), 'data', 'dataset_duplicates.conllu'), 1.0)
         self.assertEqual([([[(u'Ранее', u'')]], 1.0)], result)
 
-    def testParseWeigted(self):
+    def test_parse_weigted(self):
         result = parse_paragraphs(
             os.path.join(os.path.dirname(__file__), 'data', 'dataset__tw_10.01__weighted.conllu'), 10.01)
         self.assertEqual([
@@ -115,28 +115,28 @@ class TestRandomGlue(unittest.TestCase):
     def setUp(self):
         np.random.seed(2)
 
-    def testEmpty(self):
+    def test_empty(self):
         self.assertEqual([[' ']], random_glue())
 
-    def testShape(self):
+    def test_shape(self):
         result = random_glue(1, 1, 1, 1)
         self.assertEqual([[' ']], result)
 
-    def testNormal(self):
+    def test_normal(self):
         result = random_glue(space=10, tab=1, newline=1, reserve=1)
         self.assertEqual([[' '], [' '], [' '], [' '], [' '], [' '], [' '], [' '], [' '], ['\t']], result)
 
-    def testExtra(self):
+    def test_extra(self):
         result = random_glue(space=30, tab=5, newline=25, reserve=1)
         self.assertEqual({' \n', ' ', '\t', '\n'}, set([''.join(s) for s in result]))
 
 
 class TestAugmentParagraphs(unittest.TestCase):
-    def testEmpty(self):
+    def test_empty(self):
         result = augment_paragraphs([])
         self.assertEqual([], result)
 
-    def testNormal(self):
+    def test_normal(self):
         np.random.seed(36)
         source = [
             ([[('First', ' '), ('sentence', ' '), ('in', ' '), ('paragraph', ''), ('.', '')],
@@ -153,7 +153,7 @@ class TestAugmentParagraphs(unittest.TestCase):
         result = augment_paragraphs(source)
         self.assertEqual(expected, result)
 
-    def testSpaces(self):
+    def test_spaces(self):
         np.random.seed(1)
         source = [
             ([[('Single', ' '), ('sentence', '')],
@@ -168,11 +168,11 @@ class TestAugmentParagraphs(unittest.TestCase):
 
 
 class TestLabelSpaces(unittest.TestCase):
-    def testEmpty(self):
+    def test_empty(self):
         result = label_spaces([], [])
         self.assertEqual([], result)
 
-    def testSame(self):
+    def test_same(self):
         result = label_spaces([
             'word', ' ', ' ', ' ', 'word', '-', 'word'
         ], [
@@ -180,7 +180,7 @@ class TestLabelSpaces(unittest.TestCase):
         ])
         self.assertEqual(['T', 'S', 'S', 'S', 'T', 'T', 'T'], result)
 
-    def testJoinedSource(self):
+    def test_joined_source(self):
         result = label_spaces([
             'word', ' ', 'word-word'
         ], [
@@ -188,7 +188,7 @@ class TestLabelSpaces(unittest.TestCase):
         ])
         self.assertEqual(['T', 'S', 'T'], result)
 
-    def testJoinedTarget(self):
+    def test_joined_target(self):
         result = label_spaces([
             'word', ' ', 'word', '-', 'word'
         ], [
@@ -198,11 +198,11 @@ class TestLabelSpaces(unittest.TestCase):
 
 
 class TestLabelTokens(unittest.TestCase):
-    def testEmpty(self):
+    def test_empty(self):
         result = label_tokens([], [])
         self.assertEqual([], result)
 
-    def testSame(self):
+    def test_same(self):
         result = label_tokens([
             'word', '+', 'word', '-', 'word'
         ], [
@@ -210,7 +210,7 @@ class TestLabelTokens(unittest.TestCase):
         ])
         self.assertEqual(['D', 'D', 'D', 'D', 'D'], result)
 
-    def testNormalJoin(self):
+    def test_normal_join(self):
         result = label_tokens([
             'word', '+', 'word', '-', 'word', '_', 'word'
         ], [
@@ -218,7 +218,7 @@ class TestLabelTokens(unittest.TestCase):
         ])
         self.assertEqual(['D', 'D', 'C', 'C', 'D', 'C', 'D'], result)
 
-    def testJoinedSource(self):
+    def test_joined_source(self):
         result = label_tokens([
             'word+word-word'
         ], [
@@ -226,7 +226,7 @@ class TestLabelTokens(unittest.TestCase):
         ])
         self.assertEqual(['D'], result)
 
-    def testJoinedTarget(self):
+    def test_joined_target(self):
         result = label_tokens([
             'word', '+', 'word', '-', 'word'
         ], [
@@ -234,7 +234,7 @@ class TestLabelTokens(unittest.TestCase):
         ])
         self.assertEqual(['C', 'C', 'C', 'C', 'D'], result)
 
-    def testDifferentJoin(self):
+    def test_different_join(self):
         result = label_tokens([
             'word+word', '-', 'word'
         ], [
@@ -244,12 +244,12 @@ class TestLabelTokens(unittest.TestCase):
 
 
 class TestLabelParagraphs(tf.test.TestCase):
-    def testEmpty(self):
+    def test_empty(self):
         source = []
         result = label_paragraphs(source)
         self.assertEqual([], result)
 
-    def testNormal(self):
+    def test_normal(self):
         source = [
             ([[('Single', ' '), ('-', ' '), ('sentence.', '\t')]], 1.0),
             ([[('First', ' '), ('sentence', '   '), ('in', ' '), ('paragraph', ''), ('.', '\n')],
@@ -274,7 +274,7 @@ class TestLabelParagraphs(tf.test.TestCase):
         result = label_paragraphs(source)
         self.assertEqual(expected, result)
 
-    def testCompex(self):
+    def test_compex(self):
         source = [
             ([[('', ' '), ('test@test.com', ' ')],
               [('', ' '), ('www.test.com', ' ')],
@@ -338,12 +338,12 @@ class TestLabelParagraphs(tf.test.TestCase):
 
 
 class TestMakeDocuments(tf.test.TestCase):
-    def testEmpty(self):
+    def test_empty(self):
         source = []
         result = make_documents(source, 2)
         self.assertEqual([], result)
 
-    def testNormal(self):
+    def test_normal(self):
         source = [
             ([
                  (['Single', ' ', '-', ' ', 'sentence', '.', '\t'],
@@ -398,7 +398,7 @@ class TestMakeDocuments(tf.test.TestCase):
         self.assertEqual(expected_weights, result_weights)
         self.assertEqual(expected_labels, result_labels)
 
-    def testComplex(self):
+    def test_complex(self):
         source = [
             ([[('.', ' ')]], 1.0),
             ([[(u'\u00adTest1', ''), ('.', ' ')]], 1.1),
@@ -441,7 +441,7 @@ class TestWriteDataset(tf.test.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def testNormal(self):
+    def test_normal(self):
         source = [
             (
                 ['First', ' ', 'sentence', '   ', 'in', ' ', 'paragraph', '.', '', 'Second', ' ', '"', 'sentence',
