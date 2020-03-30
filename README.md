@@ -39,7 +39,7 @@ This is a model development part of project.
 
     Then convert sentences and paragraphs into CoNLL-U format.
     ```bash
-    tfdstbd-convert data/ud/udpipe.model data/sent/doc.txt data/source/
+    tfstbd-convert data/ud/udpipe.model data/sent/doc.txt data/source/
     ```
 
 2. Obtain dataset with already separated sentences and tokens in CoNNL-U format.
