@@ -139,11 +139,11 @@ class TestSplitConvert(unittest.TestCase):
 
         result_files = os.listdir(self.temp_dir)
         self.assertListEqual(
-            result_files, ['_sentencies_source.txt-test.conllu', '_sentencies_source.txt-train.conllu'])
+            result_files, ['___sentencies_source.txt-test.conllu', '___sentencies_source.txt-train.conllu'])
 
         with open(os.path.join(os.path.dirname(__file__), 'data', 'sentencies_test.txt'), 'rt') as f:
             expected = f.read()
-        with open(os.path.join(self.temp_dir, '_sentencies_source.txt-test.conllu'), 'rt') as f:
+        with open(os.path.join(self.temp_dir, '___sentencies_source.txt-test.conllu'), 'rt') as f:
             actual = f.read()
 
         self.assertEqual(expected, actual)

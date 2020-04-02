@@ -84,37 +84,3 @@ def document_features(documents, word_mean, word_std, ngram_minn, ngram_maxn):
         'word_title': title_case,
         'word_mixed': mixed_case,
     }
-
-
-def feature_columns(ngram_vocab, ngram_dim, ngram_oov=1, ngram_comb='sum'):
-    feature_columns = []
-
-    # Ngrams
-    ngram_categorial_column = tf.feature_column.sequence_categorical_column_with_vocabulary_list(
-        key='word_ngrams',
-        vocabulary_list=ngram_vocab,
-        dtype=tf.string,
-        num_oov_buckets=ngram_oov,
-    )
-    ngram_embedding_column = tf.feature_column.embedding_column(
-        categorical_column=ngram_categorial_column,
-        dimension=ngram_dim,
-        combiner=ngram_comb,
-    )
-    feature_columns.append(ngram_embedding_column)
-
-    # Length
-    feature_columns.append(tf.feature_column.sequence_numeric_column('word_length'))
-
-    # Boolean flags
-    for binary_column_key in ['word_nocase', 'word_lower', 'word_upper', 'word_title', 'word_mixed']:
-        binary_categorial_column = tf.feature_column.sequence_categorical_column_with_identity(
-            key=binary_column_key,
-            num_buckets=2
-        )
-        binary_indicator_column = tf.feature_column.indicator_column(
-            categorical_column=binary_categorial_column
-        )
-        feature_columns.append(binary_indicator_column)
-
-    return feature_columns

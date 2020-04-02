@@ -18,7 +18,9 @@ def parse_paragraphs(paragraphs, tokenizer_model, document_name):
     if not len(paragraphs):
         return result
 
-    assert os.path.exists(tokenizer_model) and os.path.isfile(tokenizer_model)
+    if not os.path.exists(tokenizer_model) or not os.path.isfile(tokenizer_model):
+        raise IOError('Wrong UDPipe tokenizer model')
+
     model = Model.load(tokenizer_model)
     pipeline = Pipeline(model, 'tokenize', Pipeline.NONE, Pipeline.NONE, 'conllu')
 
@@ -36,7 +38,8 @@ def parse_paragraphs(paragraphs, tokenizer_model, document_name):
             s = s.replace(u'\u240A', '\n')
             processed = pipeline.process(s).strip()
             parsed = parse(processed)
-            assert len(parsed)
+            if not len(parsed):
+                raise AssertionError('Wrong "parsed" size')
 
             head = parsed[0]
             for tail in parsed[1:]:
@@ -78,14 +81,14 @@ def split_convert(source_file, tokenizer_model, destination_path, test_size):
     if len(train_paragraphs):
         train_parsed = parse_paragraphs(train_paragraphs, tokenizer_model, '{}-train'.format(basename))
 
-        train_file = os.path.join(destination_path, '_{}-train.conllu'.format(basename))
+        train_file = os.path.join(destination_path, '___{}-train.conllu'.format(basename))
         with open(train_file, 'wb') as f:
             f.write(''.join(train_parsed).encode('utf-8'))
 
     if len(test_paragraphs):
         test_parsed = parse_paragraphs(test_paragraphs, tokenizer_model, '{}-test'.format(basename))
 
-        test_file = os.path.join(destination_path, '_{}-test.conllu'.format(basename))
+        test_file = os.path.join(destination_path, '___{}-test.conllu'.format(basename))
         with open(test_file, 'wb') as f:
             f.write(''.join(test_parsed).encode('utf-8'))
 
@@ -117,12 +120,14 @@ def main():
     src_file = argv.src_file.name
     argv.src_file.close()
 
-    assert os.path.exists(argv.dest_path) and os.path.isdir(argv.dest_path)
+    if not os.path.exists(argv.dest_path) or not os.path.isdir(argv.dest_path):
+        raise IOError('Wrong destination path')
 
     udpipe_model = argv.udpipe_model.name
     argv.udpipe_model.close()
 
-    assert 0.0 <= argv.test_size <= 1.0
+    if not 0.0 <= argv.test_size <= 1.0:
+        raise ValueError('Wrong test size')
 
     split_convert(
         source_file=src_file,

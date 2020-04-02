@@ -367,25 +367,45 @@ class TestMakeDocuments(tf.test.TestCase):
 
         expected_documents = [
             ['First', ' ', 'sentence', '   ', 'in', ' ', 'paragraph', '.', '\n', 'Second', ' ', '"', 'sentence', '"',
-             ' ', 'in', u'\xa0', 'paragraph', '.'],
-            [' ', 'test', '@', 'test', '.', 'com', ' ', 'Single', ' ', '-', ' ', 'sentence', '.']
+             ' ', 'in', u'\xa0', 'paragraph', '.', ' '],
+            [' ', 'test', '@', 'test', '.', 'com', ' ', 'Single', ' ', '-', ' ', 'sentence', '.', '\t']
         ]
         expected_spaces = [
-            ['T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'T'],
-            ['S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'S', 'T', 'T']
+            ['T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'S'],
+            ['S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', 'S']
         ]
         expected_tokens = [
-            ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D'],
-            ['D', 'D', 'C', 'C', 'C', 'C', 'D', 'D', 'D', 'D', 'D', 'D', 'D']
+            ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D'],
+            ['D', 'D', 'C', 'C', 'C', 'C', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D']
         ]
         expected_weights = [
-            [1.2] * 19,
-            [1.1] * 7 + [1.0] * 6
+            [1.2] * 20,
+            [1.1] * 7 + [1.0] * 7
         ]
         expected_labels = [
-            ['J', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'B'],
-            ['J', 'J', 'J', 'J', 'J', 'B', 'J', 'J', 'J', 'J', 'J', 'J', 'B']
+            ['J', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J'],
+            ['J', 'J', 'J', 'J', 'J', 'B', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J']
         ]
+
+        result = make_documents(source, doc_size=15)
+        result_documents, result_spaces, result_tokens, result_weights, result_labels = zip(*result)
+        result_documents, result_spaces, result_tokens, result_weights, result_labels = \
+            list(result_documents), list(result_spaces), list(result_tokens), list(result_weights), list(result_labels)
+
+        self.assertEqual(expected_documents, result_documents)
+        self.assertEqual(expected_spaces, result_spaces)
+        self.assertEqual(expected_tokens, result_tokens)
+        self.assertEqual(expected_weights, result_weights)
+        self.assertEqual(expected_labels, result_labels)
+
+    def test_spaces(self):
+        source = [([([' ', '\n', ' '])], 1.0)]
+
+        expected_documents = [[]]
+        expected_spaces = [[]]
+        expected_tokens = [[]]
+        expected_weights = [[]]
+        expected_labels = [[]]
 
         result = make_documents(source, doc_size=15)
         result_documents, result_spaces, result_tokens, result_weights, result_labels = zip(*result)

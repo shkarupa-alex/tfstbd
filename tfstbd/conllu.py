@@ -10,7 +10,8 @@ _C_LIKE_REPLACEMENTS = [(r'\s', ' '), (r'\p', '|')]
 
 
 def has_text(parsed):
-    assert hasattr(parsed, 'metadata')
+    if not hasattr(parsed, 'metadata'):
+        raise ValueError('Wrong "parsed" value')
 
     return parsed.metadata is not None and 'text' in parsed.metadata and \
            parsed.metadata['text'] is not None and len(parsed.metadata['text'])
@@ -29,7 +30,8 @@ def repair_spaces(parsed):
         next_token = None if meaning_i[-1] == t else parsed[meaning_i[i + 1]]
 
         current_text += current_token['form']
-        assert full_text.startswith(current_text)
+        if not full_text.startswith(current_text):
+            raise AssertionError('Full text should starts with reconstructed one')
 
         if next_token is None:
             continue
@@ -103,7 +105,8 @@ def split_sent(parsed, validate=True):
         if 'misc' not in t or t['misc'] is None or 'SentenceBreak' not in t['misc']:
             continue
 
-        assert 'Yes' == t['misc']['SentenceBreak']
+        if 'Yes' != t['misc']['SentenceBreak']:
+            raise ValueError('Wrong "SentenceBreak" value')
         result.append(tokens)
         tokens = []
 
@@ -128,7 +131,8 @@ def meaning_tokens(parsed):
         if isinstance(token['id'], tuple):
             if '.' in token['id']:
                 continue
-            assert len(token['id']) == 3
+            if 3 != len(token['id']):
+                raise ValueError('Unexpected token "id" value')
             skip.update(token['id'])
         if token['id'] in skip:
             continue
@@ -167,10 +171,12 @@ def extract_space(token):
         return ' '
 
     if 'SpaceAfter' in token['misc']:
-        assert 'No' == token['misc']['SpaceAfter'], token['misc']['SpaceAfter']
+        if 'No' != token['misc']['SpaceAfter']:
+            raise ValueError('Wrong "SpaceAfter" value')
         return ''
 
-    assert 'SpacesAfter' in token['misc']
+    if 'SpacesAfter' not in token['misc']:
+        raise ValueError('Wrong token "misc"')
     if token['misc']['SpacesAfter'] in {'_', ' ', None}:
         return ' '
 

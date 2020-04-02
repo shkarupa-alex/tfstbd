@@ -9,7 +9,6 @@ import numpy as np
 import re
 import six
 import tensorflow as tf
-import unicodedata
 from conllu import parse
 from itertools import cycle
 from tfmiss.text.unicode_expand import split_words
@@ -66,7 +65,8 @@ def parse_paragraphs(file_name, token_weight):
 
 
 def random_glue(space=1, tab=0, newline=0, reserve=0):
-    assert space > 0
+    if space <= 0:
+        raise ValueError('Number of spaces should be positive')
 
     max_spaces0 = int((space + 1) * 0.995 * reserve)
     num_spaces0 = np.random.randint(0, max_spaces0) if max_spaces0 > 0 else 0
@@ -142,13 +142,15 @@ def label_spaces(source, target):
 
     # Use first character label from source
     labels = [target_labels[i] for i in source_acc]
-    assert len(source) == len(labels)
+    if len(source) != len(labels):
+        raise AssertionError('Size of labels should be equal to size of source')
 
     return labels
 
 
 def label_tokens(source, target):
-    assert ''.join(target) == ''.join(source)
+    if ''.join(target) != ''.join(source):
+        raise ValueError('Joined sources and target tokens should be equal')
 
     source_len = [len(w) for w in source]
     source_acc = [sum(source_len[:i + 1]) for i in range(len(source_len))]
@@ -158,13 +160,15 @@ def label_tokens(source, target):
 
     # Break label if same break in target and source at the same time
     labels = ['D' if sum(source_len[:i + 1]) in same_split else 'C' for i in range(len(source_len))]
-    assert len(source) == len(labels)
+    if len(source) != len(labels):
+        raise AssertionError('Joined sources and labels should be equal')
 
     return labels
 
 
 def label_paragraphs(source_paragraphs, batch_size=1024):
-    assert tf.executing_eagerly()
+    if not tf.executing_eagerly():
+        raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
 
     # Sort by tokens count for lower memory consumption
     source_paragraphs = sorted(source_paragraphs, key=lambda p: sum([len(s) for s in p[0]]), reverse=True)
@@ -178,7 +182,8 @@ def label_paragraphs(source_paragraphs, batch_size=1024):
         pipeline_todo, source_paragraphs = source_paragraphs[:_batch_size], source_paragraphs[_batch_size:]
         pipeline_input = [[''.join(itertools.chain(*s)) for s in p] for p, _ in pipeline_todo]
         pipeline_done = split_words(tf.ragged.constant(pipeline_input), extended=True).to_list()
-        assert len(pipeline_done) == len(pipeline_input)
+        if len(pipeline_done) != len(pipeline_input):
+            raise AssertionError('Sizes of paragraphs before and after split should be equal')
 
         for done_prgr, (src_prgr, src_wght) in zip(pipeline_done, pipeline_todo):
             paragraph = []
@@ -188,14 +193,16 @@ def label_paragraphs(source_paragraphs, batch_size=1024):
                 space_labels = label_spaces(done_sent, src_sent)
                 paragraph.append((done_sent, space_labels, token_labels))
 
-            assert len(paragraph) > 0
+            if not len(paragraph):
+                raise AssertionError('Paragraph could not be empty')
             result_paragraphs.append((paragraph, src_wght))
 
     return result_paragraphs
 
 
 def make_documents(paragraphs, doc_size):
-    assert tf.executing_eagerly()
+    if not tf.executing_eagerly():
+        raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
 
     documents = []
     spaces = []
@@ -222,33 +229,29 @@ def make_documents(paragraphs, doc_size):
                         extended=True
                     )).numpy()
                     if split_size != 2:
-                        assert 1 == split_size
+                        if 1 != split_size:
+                            raise AssertionError('Unexpected split size')
                         sample_spaces[-1] = ''
                         sample_tokens[-1] = ''
                         sample_sentences[-1] = ''
+
+                word_print = [any([c.isprintable() and not c.isspace() for c in w]) for w in sent_words]
+                if True not in word_print:
+                    continue
 
                 sample_words.extend(sent_words)
                 sample_spaces.extend(sent_spaces)
                 sample_tokens.extend(sent_tokens)
                 sample_weights.extend([weight] * len(sent_tokens))
 
-                word_print = [any([c.isprintable() and not c.isspace() for c in w]) for w in sent_words]
                 last_printable = len(word_print) - 1 - word_print[::-1].index(True)
                 sent_breaks = ['J'] * len(sent_words)
                 sent_breaks[last_printable] = 'B'
                 sample_sentences.extend(sent_breaks)
 
-        last_in_doc = max([i for i, w in enumerate(sample_words) if len(w.strip())])
-        sample_words = sample_words[:last_in_doc + 1]
-        sample_spaces = sample_spaces[:last_in_doc + 1]
-        sample_tokens = sample_tokens[:last_in_doc + 1]
-        sample_weights = sample_weights[:last_in_doc + 1]
-        sample_sentences = sample_sentences[:last_in_doc + 1]
-        assert len(sample_words) == len(sample_tokens) == len(sample_spaces) == len(sample_weights) == len(
-            sample_sentences)
-
-        if len(sample_sentences):
-            sample_sentences[-1] = 'B'
+        if not (len(sample_words) == len(sample_tokens) == \
+                len(sample_spaces) == len(sample_weights) == len(sample_sentences)):
+            raise AssertionError('Sequence and it\'s labels should have same size')
 
         documents.append(sample_words)
         spaces.append(sample_spaces)
@@ -256,7 +259,8 @@ def make_documents(paragraphs, doc_size):
         weights.append(sample_weights)
         sentences.append(sample_sentences)
 
-    assert len(spaces) == len(tokens) == len(weights) == len(sentences)
+    if not (len(spaces) == len(tokens) == len(weights) == len(sentences)):
+        raise AssertionError('Sequence and it\'s labels should have same size')
     dataset = list(zip(documents, spaces, tokens, weights, sentences))
 
     return dataset
@@ -268,7 +272,9 @@ def _serialize_example(document, space_labels, token_labels, token_weights, sent
     space_labels = [s for s in space_labels if len(s)]
     token_weights = [w for w, s in zip(token_weights, token_labels) if len(s)]
     token_labels = [s for s in token_labels if len(s)]
-    assert len(token_weights) == len(token_labels)
+    if len(token_weights) != len(token_labels):
+        raise ValueError('Sizes of weights and labels should be equal')
+
     sentence_labels = [s for s in sentence_labels if len(s)]
 
     _sps = ','.join(space_labels)
@@ -356,7 +362,12 @@ def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, token_w
         print('Parsing file {}'.format(file_name))
         file_path = os.path.join(src_path, file_name)
 
-        _token_weight = token_weight if file_name.startswith('_') else 1.0
+        _token_weight = 1.0
+        for dash_pos in range(len(file_name)):
+            if '_' != file_name[dash_pos]:
+                break
+            _token_weight *= token_weight
+
         current_paragraphs = parse_paragraphs(file_path, _token_weight)
         print('Found {}K paragraphs in {}'.format(len(current_paragraphs) // 1000, file_name))
 
@@ -413,14 +424,19 @@ def main():
     parser.add_argument(
         '--token_weight',
         type=float,
-        default=0.0,
+        default=0.1,
         help='Weight of token for files starting with underscore')
 
     argv, _ = parser.parse_known_args()
-    assert os.path.exists(argv.src_path) and os.path.isdir(argv.src_path)
-    assert not os.path.exists(argv.dest_path) or os.path.isdir(argv.dest_path)
-    assert argv.doc_size > 0
-    assert argv.rec_size > 0
-    assert argv.num_repeats > 0
+    if not os.path.exists(argv.src_path) or not os.path.isdir(argv.src_path):
+        raise IOError('Wrong source path')
+    if os.path.exists(argv.dest_path) and not os.path.isdir(argv.dest_path):
+        raise IOError('Wrong destination path')
+    if 1 < argv.doc_size:
+        raise ValueError('Wrong document size')
+    if 1 < argv.rec_size:
+        raise ValueError('Wrong record size')
+    if 1 < argv.num_repeats:
+        raise ValueError('Wrong number of repeats')
 
     create_dataset(argv.src_path, argv.dest_path, argv.doc_size, argv.rec_size, argv.num_repeats, argv.token_weight)
