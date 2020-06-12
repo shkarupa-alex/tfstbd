@@ -28,12 +28,17 @@ setup(
             # 'tfstbd-infer=tfstbd.infer:main',
         ],
     },
+    python_requires='>=3.6.0',
     install_requires=[
-        'tensorflow>=2.1.0',
-        'tfmiss>=0.2.0',
-        'nlpvocab>=1.1.5',
-        'conllu>=1.2.1',
+        'tensorflow>=2.2.0',
+        'tfmiss>=0.6.0',
+        'nlpvocab>=1.2.0',
+        'conllu>=2.3.2',
+        'keras-tuner>=1.0.1'
     ],
-    test_suite='nose.collector',
-    tests_require=['nose', 'ufal.udpipe>=1.2.0.1']
+    setup_requires=['pytest-runner'],
+    tests_require=[
+        'pytest',
+        'ufal.udpipe>=1.2.0.1'
+    ]
 )

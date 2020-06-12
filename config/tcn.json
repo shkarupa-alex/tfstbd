@@ -38,16 +38,25 @@
     656337
   ],
   "mean_samples": 329,
-  "samples_mult": 1024,
+  "samples_mult": 16,
   "word_mean": 5.514728016340921,
   "word_std": 6.393527976525322,
   "ngram_minn": 2,
   "ngram_maxn": 5,
   "ngram_freq": 50,
   "ngram_dim": 256,
-  "ngram_oov": 1,
   "ngram_self": "always",
-  "ngram_comb": "sqrtn",
+  "ngram_comb": "mean",
+  "seq_core": "tcn",
+  "tcn_filters": [
+    256,
+    128,
+    64,
+    32
+  ],
+  "tcn_ksize": 3,
+  "tcn_drop": 0.1,
+  "tcn_padding": "same",
   "space_weight": [
     0.90226746,
     1.12147706
@@ -60,6 +69,7 @@
     0.52727742,
     9.66509113
   ],
-  "train_opt": "Adam",
+  "num_epochs": 5,
+  "train_optim": "Adam",
   "learn_rate": 0.05
 }

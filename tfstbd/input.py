@@ -7,66 +7,49 @@ from tfmiss.training import estimate_bucket_pipeline
 from .feature import document_features
 
 
-def train_input_fn(wild_card, params, cycle_length=5):
-    with tf.name_scope('input'):
-        files = tf.data.Dataset.list_files(wild_card)
+def train_dataset(wild_card, params, cycle_length=5):
+    files = tf.data.Dataset.list_files(wild_card)
+    dataset = tf.data.TFRecordDataset(files, compression_type='GZIP', num_parallel_reads=cycle_length)
+    dataset = dataset.map(_parse_length, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-        dataset = tf.data.TFRecordDataset(files, compression_type='GZIP', num_parallel_reads=cycle_length)
-        dataset = dataset.map(_parse_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    if len(params.bucket_bounds) > 1:
+        num_samples = params.mean_samples * params.samples_mult
+        buck_bounds, batch_sizes, max_bound = estimate_bucket_pipeline(params.bucket_bounds, num_samples)
+        dataset = dataset.filter(lambda _, length: length < max_bound)
+        dataset = dataset.shuffle(max(batch_sizes) * 100)
+        dataset = dataset.apply(tf.data.experimental.bucket_by_sequence_length(
+            lambda _, length: length,
+            buck_bounds,
+            batch_sizes,
+        ))
+    else:
+        tf.get_logger().warning('No bucket boundaries provided. Batch size will be reduced to 1')
+        dataset = dataset.batch(1)
 
-        if len(params.bucket_bounds) > 1:
-            num_samples = params.mean_samples * params.samples_mult
-            buck_bounds, batch_sizes, max_bound = estimate_bucket_pipeline(params.bucket_bounds, num_samples)
-            dataset = dataset.filter(lambda example: example['length'] < max_bound)
-            dataset = dataset.shuffle(max(batch_sizes) * 10)
-            dataset = dataset.apply(tf.data.experimental.bucket_by_sequence_length(
-                lambda example: tf.cast(example['length'], tf.int32),
-                buck_bounds,
-                batch_sizes,
-            ))
-        else:
-            tf.get_logger().warning('No bucket boundaries provided. Batch size will be reduced to 1')
-            dataset = dataset.batch(1)
+    dataset = dataset.map(
+        lambda protos, _: _parse_examples(protos, params),
+        num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
+    dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
-        dataset = dataset.map(
-            lambda examples: _prepare_train_examples(examples, params),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE
-        )
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-
-        return dataset
+    return dataset
 
 
-def _parse_example(proto):
-    parsed = tf.io.parse_single_example(proto, features={
+def _parse_length(proto):
+    features = {'length': tf.io.FixedLenFeature((), tf.int64)}
+    example = tf.io.parse_single_example(proto, features=features)
+
+    return proto, tf.cast(example['length'], tf.int32)
+
+
+def _parse_examples(protos, params):
+    examples = tf.io.parse_example(protos, features={
         'document': tf.io.FixedLenFeature((), tf.string),
-        'length': tf.io.FixedLenFeature((), tf.int64),
-        # 'space_labels': tf.io.FixedLenFeature((), tf.string),
-        # 'token_labels': tf.io.FixedLenFeature((), tf.string),
-        'token_weights': tf.io.VarLenFeature(tf.float32),
-        # 'sentence_labels': tf.io.FixedLenFeature((), tf.string),
-        'space_ids': tf.io.VarLenFeature(tf.int64),
-        'token_ids': tf.io.VarLenFeature(tf.int64),
-        'sentence_ids': tf.io.VarLenFeature(tf.int64),
+        'token_weights': tf.io.RaggedFeature(tf.float32),
+        'space_ids': tf.io.RaggedFeature(tf.int64),
+        'token_ids': tf.io.RaggedFeature(tf.int64),
+        'sentence_ids': tf.io.RaggedFeature(tf.int64),
     })
-
-    parsed['token_weights'] = tf.sparse.to_dense(parsed['token_weights'], 0.0)
-    parsed['space_ids'] = tf.sparse.to_dense(parsed['space_ids'], 0)
-    parsed['token_ids'] = tf.sparse.to_dense(parsed['token_ids'], 0)
-    parsed['sentence_ids'] = tf.sparse.to_dense(parsed['sentence_ids'], 0)
-
-    return parsed
-
-
-def _prepare_train_examples(examples, params):
-    # token_labels = tf.strings.split(examples['token_labels'], sep=',')
-    # token_labels = token_labels.to_tensor(default_value='B')
-    # token_labels = tf.expand_dims(token_labels, axis=-1)
-    #
-    # for k, v in features.items():
-    #     if not isinstance(features[k], tf.RaggedTensor):
-    #         continue
-    #     features[k] = v.to_sparse()
 
     features = document_features(
         examples['document'],
@@ -75,25 +58,13 @@ def _prepare_train_examples(examples, params):
         params.ngram_minn,
         params.ngram_maxn
     )
-    features['length'] = examples['length']
-
-    # del features['document']
-    # del features['words']
 
     labels = {
-        'space': examples['space_ids'],
-        'token': examples['token_ids'],
-        'sentence': examples['sentence_ids']
+        'space': tf.expand_dims(examples['space_ids'].to_tensor(0), axis=-1),
+        'token': tf.expand_dims(examples['token_ids'].to_tensor(0), axis=-1),
+        'sentence': tf.expand_dims(examples['sentence_ids'].to_tensor(0), axis=-1)
     }
-    weights = {'token': examples['token_weights']}
+
+    weights = {'token': tf.expand_dims(examples['token_weights'].to_tensor(0.), axis=-1)}
 
     return features, labels, weights
-
-# def serve_input_fn(ngram_minn, ngram_maxn):
-#     def serving_input_receiver_fn():
-#         documents = tf.placeholder(dtype=tf.string, shape=[None], name='documents')
-#         features = features_from_documens(documents, ngram_minn, ngram_maxn)
-#
-#         return tf.estimator.export.ServingInputReceiver(features, documents)
-#
-#     return serving_input_receiver_fn

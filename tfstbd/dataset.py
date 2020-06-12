@@ -103,6 +103,7 @@ def random_glue(space=1, tab=0, newline=0, reserve=0):
 
 
 def augment_paragraphs(source):
+    # TODO https://github.com/NeelShah18/emot/blob/master/emot/emo_unicode.py
     sentence_len = [len(s) for p, _ in source for s in p]
     reserve_inner = min(100000, max(100, sum(sentence_len)))
     inner_glue = cycle(random_glue(space=500, tab=1, newline=1, reserve=reserve_inner))

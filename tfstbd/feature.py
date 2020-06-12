@@ -44,11 +44,7 @@ def case_features(input_words):
         tf.logical_or(is_upper, is_title)
     ))
 
-    return tf.cast(no_case, tf.int32), \
-           tf.cast(is_lower, tf.int32), \
-           tf.cast(is_upper, tf.int32), \
-           tf.cast(is_title, tf.int32), \
-           tf.cast(is_mixed, tf.int32)
+    return no_case, is_lower, is_upper, is_title, is_mixed
 
 
 def ngram_features(input_words, minn, maxn):
@@ -71,16 +67,14 @@ def document_features(documents, word_mean, word_std, ngram_minn, ngram_maxn):
 
     length = length_features(words, word_mean, word_std)
     no_case, lower_case, upper_case, title_case, mixed_case = case_features(words)
+    feats = tf.stack([
+        length, tf.cast(no_case, tf.float32), tf.cast(lower_case, tf.float32), tf.cast(upper_case, tf.float32),
+        tf.cast(title_case, tf.float32), tf.cast(mixed_case, tf.float32)
+    ], axis=-1)
     ngrams = ngram_features(words, ngram_minn, ngram_maxn)
 
     return {
-        'document': documents,
-        'words': words.to_tensor(default_value=''),  # Required to pass in prediction
+        'word_tokens': words,  # TODO: .to_tensor(default_value='') Required to pass in prediction
         'word_ngrams': ngrams,
-        'word_length': length,
-        'word_nocase': no_case,
-        'word_lower': lower_case,
-        'word_upper': upper_case,
-        'word_title': title_case,
-        'word_mixed': mixed_case,
+        'word_feats': feats,
     }

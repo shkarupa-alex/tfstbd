@@ -9,10 +9,12 @@ import shutil
 import tensorflow as tf
 import tempfile
 import unittest
+from nlpvocab import Vocabulary
 from tfmiss.text.unicode_expand import split_words
 from ..dataset import parse_paragraphs, random_glue, augment_paragraphs, label_spaces, label_tokens
 from ..dataset import label_paragraphs, make_documents, write_dataset
-from ..input import _parse_example
+from ..hparam import build_hparams
+from ..input import _parse_examples
 
 
 class TestParseConllu(unittest.TestCase):
@@ -493,12 +495,25 @@ class TestWriteDataset(tf.test.TestCase):
         wildcard = os.path.join(self.temp_dir, '*.tfrecords.gz')
         files = tf.data.Dataset.list_files(wildcard, shuffle=False)
         dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
-        dataset = dataset.map(_parse_example)
+        dataset = dataset.batch(1)
 
-        for example in dataset.take(1):
-            self.assertEqual(example['document'].numpy().decode('utf-8'), expected_document)
-            self.assertEqual(example['length'].numpy(), 18)
-            self.assertEqual(example['token_weights'].numpy().tolist(), [1.0] * 18)
-            self.assertEqual(example['space_ids'].numpy().tolist(), expected_ispaces)
-            self.assertEqual(example['token_ids'].numpy().tolist(), expected_itokens)
-            self.assertEqual(example['sentence_ids'].numpy().tolist(), expected_isentences)
+        params = build_hparams({
+            'bucket_bounds': [10, 20],
+            'mean_samples': 16,
+            'samples_mult': 10,
+            'word_mean': 1.,
+            'word_std': 1.,
+            'ngram_minn': 1,
+            'ngram_maxn': 1,
+            'ngram_freq': 6,
+            'lstm_units': [1]
+        })
+        dataset = dataset.map(lambda protos: _parse_examples(protos, params))
+
+        for features, labels, weights in dataset.take(1):
+            actual_document = ''.join(w.numpy().decode('utf-8') for w in features['word_tokens'].flat_values)
+            self.assertEqual(actual_document, expected_document)
+            self.assertListEqual(labels['space'].numpy().reshape(-1).tolist(), expected_ispaces)
+            self.assertListEqual(labels['token'].numpy().reshape(-1).tolist(), expected_itokens)
+            self.assertListEqual(labels['sentence'].numpy().reshape(-1).tolist(), expected_isentences)
+            self.assertListEqual(weights['token'].numpy().reshape(-1).tolist(), [1.0] * 18)

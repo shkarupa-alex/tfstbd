@@ -7,7 +7,7 @@ import json
 import os
 import tensorflow as tf
 from nlpvocab import Vocabulary
-from .input import train_input_fn
+from .input import train_dataset
 from .hparam import build_hparams
 
 
@@ -16,7 +16,7 @@ def extract_vocab(dest_path, params):
         raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
 
     wildcard = os.path.join(dest_path, 'train*.tfrecords.gz')
-    dataset = train_input_fn(wildcard, params)
+    dataset = train_dataset(wildcard, params)
 
     vocab = Vocabulary()
     for features, _, _ in dataset:
