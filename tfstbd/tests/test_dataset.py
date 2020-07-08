@@ -9,7 +9,6 @@ import shutil
 import tensorflow as tf
 import tempfile
 import unittest
-from nlpvocab import Vocabulary
 from tfmiss.text.unicode_expand import split_words
 from ..dataset import parse_paragraphs, random_glue, augment_paragraphs, label_spaces, label_tokens
 from ..dataset import label_paragraphs, make_documents, write_dataset

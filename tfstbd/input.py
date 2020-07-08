@@ -64,7 +64,6 @@ def _parse_examples(protos, params):
         'token': tf.expand_dims(examples['token_ids'].to_tensor(0), axis=-1),
         'sentence': tf.expand_dims(examples['sentence_ids'].to_tensor(0), axis=-1)
     }
-
     weights = {'token': tf.expand_dims(examples['token_weights'].to_tensor(0.), axis=-1)}
 
     return features, labels, weights

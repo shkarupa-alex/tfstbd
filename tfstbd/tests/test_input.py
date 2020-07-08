@@ -5,7 +5,6 @@ from __future__ import print_function
 
 import os
 import tensorflow as tf
-from nlpvocab import Vocabulary
 from ..hparam import build_hparams
 from ..input import train_dataset
 
