@@ -30,7 +30,7 @@ setup(
     },
     python_requires='>=3.6.0',
     install_requires=[
-        'tensorflow>=2.2.0',
+        'tensorflow>=2.3.0',
         'tfmiss>=0.6.0',
         'nlpvocab>=1.2.0',
         'conllu>=2.3.2',
