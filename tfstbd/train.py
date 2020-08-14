@@ -42,12 +42,11 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
             'sentence': h_params.sentence_weight,
         },
         metrics={
-            'space': [tf.keras.metrics.Accuracy(name='space/accuracy'), F1Binary(name='space/f1')],
-            'token': [tf.keras.metrics.Accuracy(name='token/accuracy'), F1Binary(name='token/f1')],
-            'sentence': [tf.keras.metrics.Accuracy(name='sentence/accuracy'), F1Binary(name='sentence/f1')],
+            'space': [tf.keras.metrics.Accuracy(name='accuracy'), F1Binary(name='f1')],
+            'token': [tf.keras.metrics.Accuracy(name='accuracy'), F1Binary(name='f1')],
+            'sentence': [tf.keras.metrics.Accuracy(name='accuracy'), F1Binary(name='f1')],
         },
-        # sample_weight_mode='temporal',
-        run_eagerly=False,
+        run_eagerly=findlr_steps > 0,
     )
     if verbose > 0:
         model.summary()
@@ -65,16 +64,15 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
 
     history = model.fit(
         train_ds,
-        epochs=1 if lr_finder else h_params.num_epochs,
+        epochs=1 if findlr_steps > 0 else h_params.num_epochs,
         callbacks=callbacks,
-        steps_per_epoch=findlr_steps if lr_finder else None,
+        steps_per_epoch=findlr_steps if findlr_steps > 0 else None,
         validation_data=valid_ds,
         verbose=verbose
     )
 
-    if lr_finder:
-        tf.get_logger().info('Best lr should be near: {}'.format(lr_finder.find()))
-        tf.get_logger().info('Best lr graph with average=10: {}'.format(lr_finder.plot(10)))
+    if findlr_steps > 0:
+        tf.get_logger().info('Best lr should be near: {}'.format(lr_finder.plot()))
     else:
         tf.saved_model.save(model, os.path.join(model_dir, 'export'))
 

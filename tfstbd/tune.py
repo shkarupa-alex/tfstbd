@@ -49,10 +49,10 @@ def tune_model(data_dir, h_params, model_dir):
         params.override_from_dict(config)
         history = train_model(data_dir, params, model_dir, verbose=0)
         print(history)
-        for score in history['val_sentence_f1']:
-            tune.report(score=score)
+        for space_f1, token_f1, sentence_f1 in zip(history['val_space_space/f1'], history['val_token_token/f1'], history['val_sentence_sentence/f1']):
+            tune.report(score=(space_f1 + token_f1 + sentence_f1) / 3)
 
-    tune.run(trainable, num_samples=1)
+    tune.run(trainable, config=search_space, num_samples=1)
 
 
 def main():
