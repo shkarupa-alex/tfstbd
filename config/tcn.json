@@ -56,7 +56,6 @@
   ],
   "tcn_ksize": 3,
   "tcn_drop": 0.1,
-  "tcn_padding": "same",
   "space_weight": [
     0.90226746,
     1.12147706

@@ -4,7 +4,7 @@ from __future__ import print_function
 
 from tfmiss.training import HParams
 from tensorflow.keras import optimizers as core_opt
-from tensorflow_addons import optimizers as add_opt
+from tensorflow_addons import optimizers as add_opt  # Required to initialize custom optimizers
 
 
 def build_hparams(custom):
@@ -21,14 +21,13 @@ def build_hparams(custom):
         ngram_maxn=1,
         ngram_freq=2,
         ngram_dim=1,
-        ngram_self='always',  # or 'asis' or 'never' or 'alone'
-        ngram_comb='mean',  # or 'sum' or 'min' or 'max' or 'prod'
+        ngram_self='always',  # or 'alone'
+        ngram_comb='mean',  # or 'sum' or 'min' or 'max'
         seq_core='lstm',  # or 'tcn'
         lstm_units=[1],
         tcn_filters=[1],
         tcn_ksize=2,
         tcn_drop=0.1,
-        tcn_padding='causal',  # or 'same'
         space_weight=[1., 1.],
         token_weight=[1., 1.],
         sentence_weight=[1., 1.],
@@ -44,7 +43,6 @@ def build_hparams(custom):
     params.ngram_self = params.ngram_self.lower()
     params.ngram_comb = params.ngram_comb.lower()
     params.seq_core = params.seq_core.lower()
-    params.tcn_padding = params.tcn_padding.lower()
 
     if not all(0 < b for b in params.bucket_bounds):
         raise ValueError('Bad "bucket_bounds" value')
@@ -72,10 +70,10 @@ def build_hparams(custom):
     if not 0 < params.ngram_dim:
         raise ValueError('Bad "ngram_dim" value')
 
-    if params.ngram_self not in {'always', 'asis', 'never', 'alone'}:
+    if params.ngram_self not in {'always', 'alone'}:
         raise ValueError('Bad "ngram_self" value')
 
-    if params.ngram_comb not in {'mean', 'sum', 'min', 'max', 'prod'}:
+    if params.ngram_comb not in {'mean', 'sum', 'min', 'max'}:
         raise ValueError('Bad "ngram_comb" value')
 
     if params.seq_core not in {'lstm', 'tcn'}:
@@ -97,9 +95,6 @@ def build_hparams(custom):
 
     if not 0. <= params.tcn_drop:
         raise ValueError('Bad "tcn_drop" value')
-
-    if params.tcn_padding not in {'causal', 'same'}:
-        raise ValueError('Bad "tcn_padding" value')
 
     if 2 != len(params.space_weight) or any(0. >= w for w in params.space_weight):
         raise ValueError('Bad "space_weight" value')

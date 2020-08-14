@@ -34,7 +34,7 @@ setup(
         'tfmiss>=0.6.0',
         'nlpvocab>=1.2.0',
         'conllu>=2.3.2',
-        'keras-tuner>=1.0.1'
+        'ray[tune]>=0.8.6'
     ],
     setup_requires=['pytest-runner'],
     tests_require=[

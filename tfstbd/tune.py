@@ -7,112 +7,56 @@ import json
 import os
 import tensorflow as tf
 from logging import INFO
-from nlpvocab import Vocabulary
-from kerastuner import Hyperband, HyperParameters
-from tensorflow_addons.optimizers import Lookahead, RectifiedAdam
-from tfmiss.keras.callbacks import LRFinder
-from tfmiss.keras.metrics import F1Binary
-from .input import train_dataset
+from ray import tune
 from .hparam import build_hparams
-from .model import build_model
+from .train import train_model
 
 
-def tune_model(data_dir, params_path, model_dir, findlr_steps=0):
-    # ngram_minn = 1,
-    # ngram_maxn = 1,
-    # ngram_freq = 2,
-    # ngram_dim = 1,
-    # ngram_self = 'always',  # or 'asis' or 'never' or 'alone'
-    # ngram_comb = 'mean',  # or 'sum' or 'min' or 'max' or 'prod'
-    # seq_core = 'lstm',  # or 'tcn'
-    # lstm_units = [1],
-    # tcn_filters = [1],
-    # tcn_ksize = 2,
-    # tcn_drop = 0.1,
-    # tcn_padding = 'causal',  # or 'same'
-    # space_weight = [1., 1.],
-    # token_weight = [1., 1.],
-    # sentence_weight = [1., 1.],
-    # num_epochs = 1,
-    # train_optim = 'Adam',
-    # learn_rate = 0.05,
+def tune_model(data_dir, h_params, model_dir):
+    h_params.num_epochs = 2
+    h_params.seq_core = 'lstm'
 
-    hp = HyperParameters()
-    ngram_minn = hp.Int('ngram_minn', 2, 5)
-    ngram_maxn = hp.Int('ngram_maxn_[ngram_minn={}]'.format(ngram_minn), ngram_minn, 6)
-    ngram_freq = hp.Choice('ngram_freq', [10, 20, 40, 80, 160])
-    ngram_dim = hp.Int('ngram_dim', 64, 256, 64)
-    ngram_self = hp.Choice('ngram_self', ['always', 'alone'])
-    ngram_comb = hp.Choice('ngram_comb', ['mean', 'sum', 'min', 'max', 'prod'])
-    seq_core = hp.Choice('seq_core', ['lstm', 'tcn'])
+    search_space = {
+        'ngram_minn': tune.choice([2, 3, 4, 5]),
+        'ngram_maxn': tune.choice([2, 3, 4, 5, 6]),
+        'ngram_freq': tune.choice([10, 20, 40, 80, 160]),
+        'ngram_dim': tune.choice([64, 128, 192, 256, 320]),
+        'ngram_self': tune.choice(['always', 'alone']),
+        'ngram_comb': tune.choice(['mean', 'sum', 'min', 'max']),
+        # 'seq_core': tune.choice(['lstm', 'tcn']),
+        'lstm_units': tune.choice([
+            [64],
+            [128],
+            [256],
+            [64, 64],
+            [128, 64],
+            [128, 128],
+            [256, 64],
+            [256, 128],
+            [256, 256]
+        ]),
+        # 'tcn_filters': tune.choice([
+        #     [256, 128, 64, 32]
+        # ]),
+        # 'tcn_ksize': tune.choice([2, 3, 4]),
+        # 'tcn_drop': tune.choice([0.0, 0.1]),
+        'train_optim': tune.choice(['Adam', 'Addons>RectifiedAdam', 'Ranger']),
+        'learn_rate': tune.choice([1e-2, 1e-3, 1e-4]),
+    }
 
-    hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
+    def trainable(config):
+        params = build_hparams(h_params.values())
+        params.override_from_dict(config)
+        history = train_model(data_dir, params, model_dir, verbose=0)
+        print(history)
+        for score in history['val_sentence_f1']:
+            tune.report(score=score)
 
-    with open(params_path, 'r') as f:
-        h_params = build_hparams(json.loads(f.read()))
-
-    ngram_vocab = Vocabulary.load(os.path.join(data_dir, 'vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
-    ngram_top, _ = ngram_vocab.split_by_frequency(h_params.ngram_freq)
-    ngram_keys = ngram_top.tokens()
-
-    model = build_model(h_params, ngram_keys)
-
-    if 'ranger' == h_params.train_optim.lower():
-        optimizer = Lookahead(RectifiedAdam(h_params.learn_rate))
-    else:
-        optimizer = tf.keras.optimizers.get(h_params.train_optim)
-        tf.keras.backend.set_value(optimizer.lr, h_params.learn_rate)
-
-    model.compile(
-        optimizer=optimizer,
-        loss={
-            'space': 'binary_crossentropy',
-            'token': 'binary_crossentropy',
-            'sentence': 'binary_crossentropy',
-        },
-        loss_weights={
-            'space': h_params.space_weight,
-            'token': h_params.token_weight,
-            'sentence': h_params.sentence_weight,
-        },
-        metrics={
-            'space': [tf.keras.metrics.Accuracy(name='space/accuracy'), F1Binary(name='space/f1')],
-            'token': [tf.keras.metrics.Accuracy(name='token/accuracy'), F1Binary(name='token/f1')],
-            'sentence': [tf.keras.metrics.Accuracy(name='sentence/accuracy'), F1Binary(name='sentence/f1')],
-        },
-        # sample_weight_mode='temporal',
-        run_eagerly=False,
-    )
-    model.summary()
-
-    train_ds = train_dataset(os.path.join(data_dir, 'train-*.tfrecords.gz'), h_params)
-    valid_ds = train_dataset(os.path.join(data_dir, 'test-*.tfrecords.gz'), h_params)
-
-    lr_finder = None if not findlr_steps else LRFinder(findlr_steps)
-    callbacks = [
-        tf.keras.callbacks.TensorBoard(os.path.join(model_dir, 'logs'), update_freq=100, profile_batch='20, 30'),
-        tf.keras.callbacks.ModelCheckpoint(os.path.join(model_dir, 'train'), monitor='loss', verbose=True)
-    ]
-    if lr_finder:
-        callbacks.append(lr_finder)
-
-    model.fit(
-        train_ds,
-        epochs=1 if lr_finder else h_params.num_epochs,
-        callbacks=callbacks,
-        steps_per_epoch=findlr_steps if lr_finder else None,
-        validation_data=valid_ds
-    )
-
-    if lr_finder:
-        tf.get_logger().info('Best lr should be near: {}'.format(lr_finder.find()))
-        tf.get_logger().info('Best lr graph with average=10: {}'.format(lr_finder.plot(10)))
-    else:
-        tf.saved_model.save(model, os.path.join(model_dir, 'export'))
+    tune.run(trainable, num_samples=1)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train, evaluate and export tfdstbd model')
+    parser = argparse.ArgumentParser(description='Tune hyperparameters')
     parser.add_argument(
         'params_path',
         type=argparse.FileType('rb'),
@@ -124,12 +68,7 @@ def main():
     parser.add_argument(
         'model_dir',
         type=str,
-        help='Directory to store model checkpoints')
-    parser.add_argument(
-        '--findlr_steps',
-        type=int,
-        default=0,
-        help='Run model with LRFinder callback')
+        help='Directory to store models')
 
     argv, _ = parser.parse_known_args()
     assert os.path.exists(argv.data_dir) and os.path.isdir(argv.data_dir)
@@ -140,4 +79,7 @@ def main():
 
     tf.get_logger().setLevel(INFO)
 
-    train_model(argv.data_dir, params_path, argv.model_dir, argv.findlr_steps)
+    with open(params_path, 'r') as f:
+        h_params = build_hparams(json.loads(f.read()))
+
+    tune_model(argv.data_dir, h_params, argv.model_dir)

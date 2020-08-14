@@ -16,10 +16,7 @@ from .hparam import build_hparams
 from .model import build_model
 
 
-def train_model(data_dir, params_path, model_dir, findlr_steps=0):
-    with open(params_path, 'r') as f:
-        h_params = build_hparams(json.loads(f.read()))
-
+def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
     ngram_vocab = Vocabulary.load(os.path.join(data_dir, 'vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
     ngram_top, _ = ngram_vocab.split_by_frequency(h_params.ngram_freq)
     ngram_keys = ngram_top.tokens()
@@ -52,7 +49,8 @@ def train_model(data_dir, params_path, model_dir, findlr_steps=0):
         # sample_weight_mode='temporal',
         run_eagerly=False,
     )
-    model.summary()
+    if verbose > 0:
+        model.summary()
 
     train_ds = train_dataset(os.path.join(data_dir, 'train-*.tfrecords.gz'), h_params)
     valid_ds = train_dataset(os.path.join(data_dir, 'test-*.tfrecords.gz'), h_params)
@@ -65,12 +63,13 @@ def train_model(data_dir, params_path, model_dir, findlr_steps=0):
     if lr_finder:
         callbacks.append(lr_finder)
 
-    model.fit(
+    history = model.fit(
         train_ds,
         epochs=1 if lr_finder else h_params.num_epochs,
         callbacks=callbacks,
         steps_per_epoch=findlr_steps if lr_finder else None,
-        validation_data=valid_ds
+        validation_data=valid_ds,
+        verbose=verbose
     )
 
     if lr_finder:
@@ -78,6 +77,8 @@ def train_model(data_dir, params_path, model_dir, findlr_steps=0):
         tf.get_logger().info('Best lr graph with average=10: {}'.format(lr_finder.plot(10)))
     else:
         tf.saved_model.save(model, os.path.join(model_dir, 'export'))
+
+    return history
 
 
 def main():
@@ -109,4 +110,7 @@ def main():
 
     tf.get_logger().setLevel(INFO)
 
-    train_model(argv.data_dir, params_path, argv.model_dir, argv.findlr_steps)
+    with open(params_path, 'r') as f:
+        h_params = build_hparams(json.loads(f.read()))
+
+    train_model(argv.data_dir, h_params, argv.model_dir, argv.findlr_steps)
