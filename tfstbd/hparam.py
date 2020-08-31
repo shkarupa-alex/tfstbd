@@ -15,8 +15,6 @@ def build_hparams(custom):
         bucket_bounds=[1],
         mean_samples=1,
         samples_mult=1,
-        word_mean=1.,
-        word_std=1.,
         ngram_minn=1,
         ngram_maxn=1,
         ngram_freq=2,
@@ -28,6 +26,8 @@ def build_hparams(custom):
         tcn_filters=[1],
         tcn_ksize=2,
         tcn_drop=0.1,
+        att_core='none',  # or 'luong' or 'bahdanau'
+        att_drop=0.0,
         space_weight=[1., 1.],
         token_weight=[1., 1.],
         sentence_weight=[1., 1.],
@@ -43,6 +43,7 @@ def build_hparams(custom):
     params.ngram_self = params.ngram_self.lower()
     params.ngram_comb = params.ngram_comb.lower()
     params.seq_core = params.seq_core.lower()
+    params.att_core = params.att_core.lower()
 
     if not all(0 < b for b in params.bucket_bounds):
         raise ValueError('Bad "bucket_bounds" value')
@@ -54,12 +55,6 @@ def build_hparams(custom):
 
     if not 0 < params.samples_mult:
         raise ValueError('Bad "samples_mult" value')
-
-    if not 0. < params.word_mean:
-        raise ValueError('Bad "word_mean" value')
-
-    if not 0. < params.word_std:
-        raise ValueError('Bad "word_std" value')
 
     if not 0 < params.ngram_minn <= params.ngram_maxn:
         raise ValueError('Bad "ngram_minn" or "ngram_maxn" value')
@@ -82,7 +77,7 @@ def build_hparams(custom):
     if 'lstm' == params.seq_core:
         if not params.lstm_units:
             raise ValueError('Bad "lstm_units" value')
-        if not all(0 < u for u in params.lstm_units):
+        if any(0 >= u for u in params.lstm_units):
             raise ValueError('Bad "lstm_units" value')
     else:
         if not params.tcn_filters:
@@ -95,6 +90,12 @@ def build_hparams(custom):
 
     if not 0. <= params.tcn_drop:
         raise ValueError('Bad "tcn_drop" value')
+
+    if params.att_core not in {'none', 'luong', 'bahdanau'}:
+        raise ValueError('Bad "att_core" value')
+
+    if not 0. <= params.att_drop:
+        raise ValueError('Bad "att_drop" value')
 
     if 2 != len(params.space_weight) or any(0. >= w for w in params.space_weight):
         raise ValueError('Bad "space_weight" value')

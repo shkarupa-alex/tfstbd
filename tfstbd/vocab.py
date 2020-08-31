@@ -4,32 +4,35 @@ from __future__ import print_function
 
 import argparse
 import json
+import numpy as np
 import os
 import tensorflow as tf
 from nlpvocab import Vocabulary
-from .input import train_dataset
+from tfmiss.keras.layers import CharNgams
+from .input import vocab_dataset
 from .hparam import build_hparams
 
 
-def extract_vocab(dest_path, params):
-    if not tf.executing_eagerly():
-        raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
-
+def extract_vocab(dest_path, h_params):
     wildcard = os.path.join(dest_path, 'train*.tfrecords.gz')
-    dataset = train_dataset(wildcard, params)
+    dataset = vocab_dataset(wildcard, h_params)
 
-    vocab = Vocabulary()
-    for features, _, _ in dataset:
-        ngrams = features['word_ngrams'].flat_values.numpy()
-        ngrams = [n.decode('utf-8') for n in ngrams if n not in {b'', b'<>'}]
+    token_vocab = Vocabulary()
+    for tokens in dataset:
+        tokens = np.char.decode(tokens.flat_values.numpy().astype('S'), 'utf-8')
+        token_vocab.update(tokens)
 
-        # # only non-alpha, including suffixes, postfixes and other interesting parts
-        # ngrams = [n for n in ngrams if not n.isalpha()] # TODO
-        vocab.update(ngrams)
+    ngram_vocab = Vocabulary()
+    tokens = tf.constant(token_vocab.tokens(), dtype=tf.string)
+    ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self)(tokens)
+    for token, ngram in zip(token_vocab.tokens(), ngrams):
+        ngram = np.char.decode(ngram.numpy().astype('S'), 'utf-8').reshape([-1])
+        for n in ngram:
+            ngram_vocab[n] += token_vocab[token]
 
-    vocab.trim(2)  # at least 2 occurrences
+    ngram_vocab, _ = ngram_vocab.split_by_frequency(2)  # at least 2 occurrences
 
-    return vocab
+    return ngram_vocab
 
 
 def main():
@@ -55,9 +58,8 @@ def main():
 
     vocab.save(os.path.join(argv.src_path, 'vocab.pkl'), Vocabulary.FORMAT_BINARY_PICKLE)
 
-    vocab.update(['<UNK_{}>'.format(i) for i in range(params.ngram_oov)])
+    vocab['[UNK]'] = vocab[vocab.tokens()[0]] + 1
     vocab.save(os.path.join(argv.src_path, 'vocab.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
 
-    freq1000 = vocab.most_common(1001)[-1][1] - 1
-    vocab.trim(freq1000)
+    vocab, _ = vocab.split_by_size(1000)
     vocab.save(os.path.join(argv.src_path, 'vocab_tensorboard.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)

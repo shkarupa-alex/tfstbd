@@ -106,9 +106,9 @@ def augment_paragraphs(source):
     # TODO https://github.com/NeelShah18/emot/blob/master/emot/emo_unicode.py
     sentence_len = [len(s) for p, _ in source for s in p]
     reserve_inner = min(100000, max(100, sum(sentence_len)))
-    inner_glue = cycle(random_glue(space=500, tab=1, newline=1, reserve=reserve_inner))
-    outer_glue = cycle(random_glue(space=500, tab=1, newline=15, reserve=max(10, reserve_inner // 5)))
-    extra_glue = cycle(random_glue(space=500, tab=5, newline=150, reserve=max(10, reserve_inner // 10)))
+    inner_glue = cycle(random_glue(space=300, tab=1, newline=1, reserve=reserve_inner))
+    outer_glue = cycle(random_glue(space=500, tab=1, newline=5, reserve=max(10, reserve_inner // 5)))
+    extra_glue = cycle(random_glue(space=500, tab=5, newline=100, reserve=max(10, reserve_inner // 10)))
 
     result = []
     for paragraph, token_weight in source:
@@ -153,6 +153,9 @@ def label_tokens(source, target):
     if ''.join(target) != ''.join(source):
         raise ValueError('Joined sources and target tokens should be equal')
 
+    if not len(target):
+        return []
+
     source_len = [len(w) for w in source]
     source_acc = [sum(source_len[:i + 1]) for i in range(len(source_len))]
     target_len = [len(w) for w in target]
@@ -160,11 +163,11 @@ def label_tokens(source, target):
     same_split = set(source_acc).intersection(target_acc)
 
     # Break label if same break in target and source at the same time
-    labels = ['D' if sum(source_len[:i + 1]) in same_split else 'C' for i in range(len(source_len))]
+    labels = ['B' if sum(source_len[:i + 1]) in same_split else 'I' for i in range(len(source_len))]
     if len(source) != len(labels):
         raise AssertionError('Joined sources and labels should be equal')
 
-    return labels
+    return ['B'] + labels[:-1]  # shift right
 
 
 def label_paragraphs(source_paragraphs, batch_size=1024):
@@ -245,12 +248,12 @@ def make_documents(paragraphs, doc_size):
                 sample_tokens.extend(sent_tokens)
                 sample_weights.extend([weight] * len(sent_tokens))
 
-                last_printable = len(word_print) - 1 - word_print[::-1].index(True)
-                sent_breaks = ['J'] * len(sent_words)
-                sent_breaks[last_printable] = 'B'
+                sent_breaks = ['I'] * len(sent_words)
+                if len(sent_words):
+                    sent_breaks[0] = 'B'
                 sample_sentences.extend(sent_breaks)
 
-        if not (len(sample_words) == len(sample_tokens) == \
+        if not (len(sample_words) == len(sample_tokens) ==
                 len(sample_spaces) == len(sample_weights) == len(sample_sentences)):
             raise AssertionError('Sequence and it\'s labels should have same size')
 
@@ -278,32 +281,24 @@ def _serialize_example(document, space_labels, token_labels, token_weights, sent
 
     sentence_labels = [s for s in sentence_labels if len(s)]
 
-    _sps = ','.join(space_labels)
-    _tok = ','.join(token_labels)
-    _sent = ','.join(sentence_labels)
-
     _spsi = [0 if 'T' == s else 1 for s in space_labels]  # 0 == TOKEN, 1 == SPACE
-    _toki = [0 if 'D' == s else 1 for s in token_labels]  # 0 == DIVIDE, 1 == COMBINE
-    _senti = [0 if 'J' == s else 1 for s in sentence_labels]  # 0 == JOIN, 1 == BREAK
+    _toki = [0 if 'B' == s else 1 for s in token_labels]  # 0 == BEGIN, 1 == INSIDE
+    _senti = [0 if 'I' == s else 1 for s in sentence_labels]  # 0 == INSIDE, 1 == BEGIN
 
     return tf.train.Example(features=tf.train.Features(feature={
         'document': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.compat.as_bytes(_doc)])),
         'length': tf.train.Feature(int64_list=tf.train.Int64List(value=[len(space_labels)])),
-        'space_labels': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.compat.as_bytes(_sps)])),
-        'token_labels': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.compat.as_bytes(_tok)])),
-        'token_weights': tf.train.Feature(float_list=tf.train.FloatList(value=token_weights)),
-        'sentence_labels': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.compat.as_bytes(_sent)])),
-        'space_ids': tf.train.Feature(int64_list=tf.train.Int64List(value=_spsi)),
-        'token_ids': tf.train.Feature(int64_list=tf.train.Int64List(value=_toki)),
-        'sentence_ids': tf.train.Feature(int64_list=tf.train.Int64List(value=_senti)),
+
+        'space': tf.train.Feature(int64_list=tf.train.Int64List(value=_spsi)),
+        'token': tf.train.Feature(int64_list=tf.train.Int64List(value=_toki)),
+        'sentence': tf.train.Feature(int64_list=tf.train.Int64List(value=_senti)),
+
+        'token_weight': tf.train.Feature(float_list=tf.train.FloatList(value=token_weights)),
     })).SerializeToString()
 
 
 def write_dataset(dest_path, base_name, examples_batch):
-    try:
-        os.makedirs(dest_path)
-    except:
-        pass
+    os.makedirs(dest_path, exist_ok=True)
 
     exist_pattern = base_name + r'-(\d+).tfrecords.gz'
     exist_records = [f for f in os.listdir(dest_path) if re.match(exist_pattern, f)]
@@ -353,7 +348,7 @@ def process_split(paragraphs, doc_size, rec_size, num_repeats, dest_path, base_n
         write_dataset(dest_path, base_name, todo)
 
 
-def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, token_weight):
+def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, dash_weight):
     print('Reading source files from {}'.format(src_path))
     source_paragraphs = []
     for file_name in os.listdir(src_path):
@@ -367,7 +362,7 @@ def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, token_w
         for dash_pos in range(len(file_name)):
             if '_' != file_name[dash_pos]:
                 break
-            _token_weight *= token_weight
+            _token_weight *= dash_weight
 
         current_paragraphs = parse_paragraphs(file_path, _token_weight)
         print('Found {}K paragraphs in {}'.format(len(current_paragraphs) // 1000, file_name))
@@ -378,9 +373,8 @@ def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, token_w
     print('Shuffling and splitting')
     np.random.shuffle(source_paragraphs)
     total_size = len(source_paragraphs)
-    train_paragraphs = source_paragraphs[:int(total_size * 0.9)]
-    test_paragraphs = source_paragraphs[int(total_size * 0.9):int(total_size * 0.95)]
-    valid_paragraphs = source_paragraphs[int(total_size * 0.95):]
+    train_paragraphs = source_paragraphs[:int(total_size * 0.95)]
+    test_paragraphs = source_paragraphs[int(total_size * 0.95):]
     del source_paragraphs
 
     print('Processing train dataset')
@@ -390,10 +384,6 @@ def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, token_w
     print('Processing test dataset')
     process_split(test_paragraphs, doc_size, rec_size, num_repeats, dest_path, 'test')
     del test_paragraphs
-
-    print('Processing valid dataset')
-    process_split(valid_paragraphs, doc_size, rec_size, num_repeats, dest_path, 'valid')
-    del valid_paragraphs
 
 
 def main():
@@ -423,7 +413,7 @@ def main():
         default=5,
         help='How many times repeat source data (useful due paragraphs shuffling and random glue)')
     parser.add_argument(
-        '--token_weight',
+        '--dash_weight',
         type=float,
         default=0.1,
         help='Weight of token for files starting with underscore')
@@ -433,11 +423,11 @@ def main():
         raise IOError('Wrong source path')
     if os.path.exists(argv.dest_path) and not os.path.isdir(argv.dest_path):
         raise IOError('Wrong destination path')
-    if 1 < argv.doc_size:
+    if 1 > argv.doc_size:
         raise ValueError('Wrong document size')
-    if 1 < argv.rec_size:
+    if 1 > argv.rec_size:
         raise ValueError('Wrong record size')
-    if 1 < argv.num_repeats:
+    if 1 > argv.num_repeats:
         raise ValueError('Wrong number of repeats')
 
-    create_dataset(argv.src_path, argv.dest_path, argv.doc_size, argv.rec_size, argv.num_repeats, argv.token_weight)
+    create_dataset(argv.src_path, argv.dest_path, argv.doc_size, argv.rec_size, argv.num_repeats, argv.dash_weight)

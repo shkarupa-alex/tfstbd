@@ -7,6 +7,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from collections import Counter
+from tfmiss.text import split_words
 from tfmiss.training import estimate_bucket_boundaries
 from .input import train_dataset
 from .hparam import build_hparams
@@ -23,39 +24,46 @@ def check_dataset(data_path):
         'samples_mult': 1,
         'ngram_minn': 999,
         'ngram_maxn': 999,
+        'lstm_units': [1]
     })
     dataset = train_dataset(wildcard, params)
 
-    sent_len, word_len = Counter(), Counter()
+    sent_len = Counter()
     sps_class, tok_class, sent_class = Counter(), Counter(), Counter()
     samples = []
     for features, labels, weights in dataset:
-        words, spaces, tokens, sentences = \
-            features['words'].numpy(), labels['space'].numpy(), labels['token'].numpy(), labels['sentence'].numpy()
-        sent_len.update([len(words[0])])
-        word_len.update([len(w) for w in words[0]])
+        documents, spaces, tokens, sentences, token_weights = \
+            features['documents'], \
+            labels['space'].numpy().reshape([-1]), \
+            labels['token'].numpy().reshape([-1]), \
+            labels['sentence'].numpy().reshape([-1]), \
+            weights['token'].numpy().reshape([-1])
 
-        sps_class.update([c for c in spaces[0]])
-        tok_class.update([c for c in tokens[0]])
-        sent_class.update([c for c in sentences[0]])
+        words = split_words(documents, extended=True)
+        words = np.char.decode(words.flat_values.numpy().reshape([-1]).astype('S'), 'utf-8')
+        sent_len.update([len(words)])
 
-        if len(words[0]) != len(spaces[0]) or \
-                len(spaces[0]) != len(tokens[0]) or \
-                len(tokens[0]) != len(sentences[0]) or \
-                len(sentences[0]) != len(weights['token'][0]):
+        sps_class.update(spaces)
+        tok_class.update(tokens)
+        sent_class.update(sentences)
+
+        if len(words) != len(spaces) or \
+                len(spaces) != len(tokens) or \
+                len(tokens) != len(sentences) or \
+                len(sentences) != len(token_weights):
             print('Found error in inputs shapes: {} vs {} vs {} vs {} vs {}'.format(
-                len(words[0]), len(spaces[0]), len(tokens[0]), len(sentences[0]), len(weights['token'][0])))
-            print(u'words ({}):'.format(len(words[0])), [w.decode('utf-8') for w in words[0]])
-            print(u'tokens ({}):'.format(len(tokens[0])), [w.decode('utf-8') for w in tokens[0]])
-            print(u'sentences ({}):'.format(len(sentences[0])), [w.decode('utf-8') for w in sentences[0]])
+                len(words), len(spaces), len(tokens), len(sentences), len(token_weights)))
+            print(u'words ({}):'.format(len(words)))
+            print(u'tokens ({}):'.format(len(tokens)))
+            print(u'sentences ({}):'.format(len(sentences)))
             raise Exception('Dataset check failed')
 
         if len(samples) < 5:
-            samples.append(u''.join([w.decode('utf-8') for w in words[0]]))
+            samples.append(u''.join(words))
 
         del words, tokens, sentences
 
-    return sent_len, word_len, sps_class, tok_class, sent_class, samples
+    return sent_len, sps_class, tok_class, sent_class, samples
 
 
 def mean_from_counter(cntr):
@@ -92,38 +100,28 @@ def main():
     if not os.path.exists(argv.data_path) or not os.path.isdir(argv.data_path):
         raise ValueError('Wrong data path')
 
-    try:
-        sent_len, word_len, sps_class, tok_class, sent_class, samples = check_dataset(argv.data_path)
-        print('Dataset checked successfully')
+    sent_len, sps_class, tok_class, sent_class, samples = check_dataset(argv.data_path)
+    print('Dataset checked successfully')
 
-        print('Samples from dataset:')
-        for s in samples:
-            print('-' * 80)
-            print(s)
+    print('Samples from dataset:')
+    for s in samples:
+        print('-' * 80)
+        print(s)
 
-        word_mean = mean_from_counter(word_len)
-        word_std = std_from_counter(word_len, word_mean)
-        print('\nFor better word length scaling use these values in your config:')
-        print('word_mean: {}'.format(word_mean))
-        print('word_std: {}'.format(word_std))
+    buck_bounds = estimate_bucket_boundaries(sent_len)
+    print('\nFor better performance use these value in your config:')
+    print('bucket_bounds: {}'.format(buck_bounds))
 
-        buck_bounds = estimate_bucket_boundaries(sent_len)
-        print('\nFor better performance use these value in your config:')
-        print('bucket_bounds: {}'.format(buck_bounds))
+    sent_mean = int(mean_from_counter(sent_len))
+    sent_max = max(list(sent_len.values()))
+    print('\nKeep in mind when choosing number of samples in batch:')
+    print('Mean samples per example: {}'.format(sent_mean))
+    print('Max samples per example: {}'.format(sent_max))
 
-        sent_mean = int(mean_from_counter(sent_len))
-        sent_max = max(list(sent_len.values()))
-        print('\nKeep in mind when choosing number of samples in batch:')
-        print('Mean samples per example: {}'.format(sent_mean))
-        print('Max samples per example: {}'.format(sent_max))
-
-        sps_weights = weighted_class_balance(sps_class)
-        tok_weights = weighted_class_balance(tok_class)
-        sent_weights = weighted_class_balance(sent_class)
-        print('\nFor better metrics use these value in your config:')
-        print('space_weight: {}'.format(sps_weights))
-        print('token_weight: {}'.format(tok_weights))
-        print('sentence_weight: {}'.format(sent_weights))
-
-    except Exception as e:
-        print(e)
+    sps_weights = weighted_class_balance(sps_class)
+    tok_weights = weighted_class_balance(tok_class)
+    sent_weights = weighted_class_balance(sent_class)
+    print('\nFor better metrics use these value in your config:')
+    print('space_weight: {}'.format(sps_weights))
+    print('token_weight: {}'.format(tok_weights))
+    print('sentence_weight: {}'.format(sent_weights))

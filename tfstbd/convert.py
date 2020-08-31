@@ -35,7 +35,7 @@ def parse_paragraphs(paragraphs, tokenizer_model, document_name):
             continue
 
         for si, s in enumerate(sentences):
-            s = s.replace(u'\u240A', '\n')
+            s = s.replace(u'\u240A', '\n')  # "LF"
             processed = pipeline.process(s).strip()
             parsed = parse(processed)
             if not len(parsed):
@@ -58,8 +58,8 @@ def parse_paragraphs(paragraphs, tokenizer_model, document_name):
             head.metadata = OrderedDict(metadata)
             for i in range(len(head)):
                 head[i]['lemma'] = None
-                head[i]['upostag'] = None
-                head[i]['xpostag'] = None
+                head[i]['upos'] = None
+                head[i]['xpos'] = None
                 head[i]['feats'] = None
 
             head = repair_spaces(head)

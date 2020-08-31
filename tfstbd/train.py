@@ -17,11 +17,13 @@ from .model import build_model
 
 
 def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
-    ngram_vocab = Vocabulary.load(os.path.join(data_dir, 'vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
-    ngram_top, _ = ngram_vocab.split_by_frequency(h_params.ngram_freq)
-    ngram_keys = ngram_top.tokens()
+    # tf.debugging.experimental.enable_dump_debug_info(
+    #     dump_root=os.path.join(model_dir, 'debug'),
+    #     tensor_debug_mode='FULL_HEALTH',
+    #     circular_buffer_size=-1)
 
-    model = build_model(h_params, ngram_keys)
+    ngram_vocab = Vocabulary.load(os.path.join(data_dir, 'vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
+    model = build_model(h_params, ngram_vocab)
 
     if 'ranger' == h_params.train_optim.lower():
         optimizer = Lookahead(RectifiedAdam(h_params.learn_rate))
@@ -36,15 +38,15 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
             'token': 'binary_crossentropy',
             'sentence': 'binary_crossentropy',
         },
-        loss_weights={
-            'space': h_params.space_weight,
-            'token': h_params.token_weight,
-            'sentence': h_params.sentence_weight,
-        },
+        # loss_weights={
+        #     'space': h_params.space_weight,
+        #     'token': h_params.token_weight,
+        #     'sentence': h_params.sentence_weight,
+        # },
         metrics={
-            'space': [tf.keras.metrics.Accuracy(name='accuracy'), F1Binary(name='f1')],
-            'token': [tf.keras.metrics.Accuracy(name='accuracy'), F1Binary(name='f1')],
-            'sentence': [tf.keras.metrics.Accuracy(name='accuracy'), F1Binary(name='f1')],
+            'space': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
+            'token': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
+            'sentence': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
         },
         run_eagerly=findlr_steps > 0,
     )

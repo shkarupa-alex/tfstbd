@@ -12,8 +12,7 @@ import unittest
 from tfmiss.text.unicode_expand import split_words
 from ..dataset import parse_paragraphs, random_glue, augment_paragraphs, label_spaces, label_tokens
 from ..dataset import label_paragraphs, make_documents, write_dataset
-from ..hparam import build_hparams
-from ..input import _parse_examples
+from ..input import _parse_example
 
 
 class TestParseConllu(unittest.TestCase):
@@ -105,7 +104,7 @@ class TestParseConllu(unittest.TestCase):
 
     def test_parse_weigted(self):
         result = parse_paragraphs(
-            os.path.join(os.path.dirname(__file__), 'data', 'dataset__tw_10.01__weighted.conllu'), 10.01)
+            os.path.join(os.path.dirname(__file__), 'data', 'dataset_weighted.conllu'), 10.01)
         self.assertEqual([
             ([[('Ранее', '')]], 10.01),
             ([[('Позднее', '')]], 10.01)
@@ -162,7 +161,7 @@ class TestAugmentParagraphs(unittest.TestCase):
         ]
         expected = [
             ([[('Single', ' '), ('sentence', ' ')],
-              [('Next', ' '), ('single', ' '), ('sentence', '\n')]], 1.1)
+              [('Next', ' '), ('single', '  '), ('sentence', ' ')]], 1.1)
         ]
         result = augment_paragraphs(source)
         self.assertEqual(expected, result)
@@ -209,7 +208,7 @@ class TestLabelTokens(unittest.TestCase):
         ], [
             'word', '+', 'word', '-', 'word'
         ])
-        self.assertEqual(['D', 'D', 'D', 'D', 'D'], result)
+        self.assertEqual(['B', 'B', 'B', 'B', 'B'], result)
 
     def test_normal_join(self):
         result = label_tokens([
@@ -217,7 +216,7 @@ class TestLabelTokens(unittest.TestCase):
         ], [
             'word', '+', 'word-word', '_word'
         ])
-        self.assertEqual(['D', 'D', 'C', 'C', 'D', 'C', 'D'], result)
+        self.assertEqual(['B', 'B', 'B', 'I', 'I', 'B', 'I'], result)
 
     def test_joined_source(self):
         result = label_tokens([
@@ -225,7 +224,7 @@ class TestLabelTokens(unittest.TestCase):
         ], [
             'word', '+', 'word', '-', 'word'
         ])
-        self.assertEqual(['D'], result)
+        self.assertEqual(['B'], result)
 
     def test_joined_target(self):
         result = label_tokens([
@@ -233,7 +232,7 @@ class TestLabelTokens(unittest.TestCase):
         ], [
             'word+word-word'
         ])
-        self.assertEqual(['C', 'C', 'C', 'C', 'D'], result)
+        self.assertEqual(['B', 'I', 'I', 'I', 'I'], result)
 
     def test_different_join(self):
         result = label_tokens([
@@ -241,7 +240,7 @@ class TestLabelTokens(unittest.TestCase):
         ], [
             'word', '+', 'word-word'
         ])
-        self.assertEqual(['C', 'C', 'D'], result)
+        self.assertEqual(['B', 'I', 'I'], result)
 
 
 class TestLabelParagraphs(tf.test.TestCase):
@@ -261,15 +260,15 @@ class TestLabelParagraphs(tf.test.TestCase):
             ([
                  ([u'First', u' ', u'sentence', u'   ', u'in', u' ', u'paragraph', u'.', u'\n'],
                   ['T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B']),
                  ([u'Second', u' ', u'"', u'sentence', u'"', u' ', u'in', u'\u00A0', u'paragraph', u'.', u' '],
                   ['T', 'S', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D'])
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'])
              ], 1.1),
             ([
                  ([u'Single', u' ', u'-', u' ', u'sentence', u'.', u'\t'],
                   ['T', 'S', 'T', 'S', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'C', 'D', 'D'])
+                  ['B', 'B', 'B', 'B', 'B', 'I', 'B'])
              ], 1.0),
         ]
         result = label_paragraphs(source)
@@ -293,44 +292,44 @@ class TestLabelParagraphs(tf.test.TestCase):
             ([
                  ([' ', 'test', '@', 'test', '.', 'com', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B']),
 
                  ([' ', 'www', '.', 'test', '.', 'com', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B']),
 
                  ([' ', 'word', '.', '.', 'word', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'D', 'C', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'I', 'B', 'B']),
 
                  ([' ', 'word', '+', 'word', '-', 'word', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B']),
 
                  ([' ', 'word', '\\', 'word', '/', 'word', '#', 'word', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B']),
              ], 1.1),
             ([
                  ([' ', 'test', '@', 'test', '.', 'com', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'C', 'C', 'C', 'C', 'D', 'D']),
+                  ['B', 'B', 'I', 'I', 'I', 'I', 'B']),
 
                  ([' ', 'www', '.', 'test', '.', 'com', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'C', 'C', 'C', 'C', 'D', 'D']),
+                  ['B', 'B', 'I', 'I', 'I', 'I', 'B']),
 
                  ([' ', 'word', '.', '.', 'word', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'C', 'C', 'C', 'D', 'D']),
+                  ['B', 'B', 'I', 'I', 'I', 'B']),
 
                  ([' ', 'word', '+', 'word', '-', 'word', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'C', 'C', 'C', 'C', 'D', 'D']),
+                  ['B', 'B', 'I', 'I', 'I', 'I', 'B']),
 
                  ([' ', 'word', '\\', 'word', '/', 'word', '#', 'word', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'C', 'C', 'C', 'C', 'C', 'C', 'D', 'D']),
+                  ['B', 'B', 'I', 'I', 'I', 'I', 'I', 'I', 'B']),
              ], 1.0),
         ]
 
@@ -349,20 +348,20 @@ class TestMakeDocuments(tf.test.TestCase):
             ([
                  (['Single', ' ', '-', ' ', 'sentence', '.', '\t'],
                   ['T', 'S', 'T', 'S', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D'])
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B'])
              ], 1.0),
             ([
                  ([' ', 'test', '@', 'test', '.', 'com', ' '],
                   ['S', 'T', 'T', 'T', 'T', 'T', 'S'],
-                  ['D', 'D', 'C', 'C', 'C', 'C', 'D']),
+                  ['B', 'B', 'I', 'I', 'I', 'I', 'B']),
              ], 1.1),
             ([
                  (['First', ' ', 'sentence', '   ', 'in', ' ', 'paragraph', '.', '\n'],
                   ['T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D']),
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B']),
                  (['Second', ' ', '"', 'sentence', '"', ' ', 'in', u'\u00A0', 'paragraph', '.', ' '],
                   ['T', 'S', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'S'],
-                  ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D'])
+                  ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'])
              ], 1.2),
         ]
 
@@ -376,16 +375,16 @@ class TestMakeDocuments(tf.test.TestCase):
             ['S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', 'S']
         ]
         expected_tokens = [
-            ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D'],
-            ['D', 'D', 'C', 'C', 'C', 'C', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D']
+            ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'],
+            ['B', 'B', 'I', 'I', 'I', 'I', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B']
         ]
         expected_weights = [
             [1.2] * 20,
             [1.1] * 7 + [1.0] * 7
         ]
         expected_labels = [
-            ['J', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J'],
-            ['J', 'J', 'J', 'J', 'J', 'B', 'J', 'J', 'J', 'J', 'J', 'J', 'B', 'J']
+            ['B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I'],
+            ['B', 'I', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I', 'I', 'I', 'I']
         ]
 
         result = make_documents(source, doc_size=15)
@@ -468,16 +467,16 @@ class TestWriteDataset(tf.test.TestCase):
                 ['First', ' ', 'sentence', '   ', 'in', ' ', 'paragraph', '.', '', 'Second', ' ', '"', 'sentence',
                  '"', ' ', 'in', u'\xa0', 'paragraph', '.'],
                 ['T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', '', 'T', 'S', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'T'],
-                ['D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', '', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'D'],
+                ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', '', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'],
                 [1.0] * 19,
-                ['J', 'J', 'J', 'J', 'J', 'J', 'J', 'B', '', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'J', 'B'],
+                ['I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', '', 'B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I'],
             ),
             (
                 [' ', 'test', '@', 'test', '.', 'com', ' ', 'Single', ' ', '-', ' ', 'sentence', '.'],
                 ['S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'S', 'T', 'T'],
-                ['D', 'D', 'C', 'C', 'C', 'C', 'D', 'D', 'D', 'D', 'D', 'D', 'D'],
+                ['B', 'B', 'I', 'I', 'I', 'I', 'B', 'B', 'B', 'B', 'B', 'B', 'B'],
                 [0.5] * 13,
-                ['J', 'J', 'J', 'J', 'J', 'B', 'B', 'J', 'J', 'J', 'J', 'J', 'B'],
+                ['I', 'I', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I', 'I', 'I'],
             )
         ]
 
@@ -486,33 +485,21 @@ class TestWriteDataset(tf.test.TestCase):
         expected_tokens = ','.join(source[0][2]).replace(',,', ',')
         expected_sentences = ','.join(source[0][4]).replace(',,', ',')
         expected_ispaces = list(map(int, expected_spaces.replace('T', '0').replace('S', '1').split(',')))
-        expected_itokens = list(map(int, expected_tokens.replace('D', '0').replace('C', '1').split(',')))
-        expected_isentences = list(map(int, expected_sentences.replace('J', '0').replace('B', '1').split(',')))
+        expected_itokens = list(map(int, expected_tokens.replace('B', '0').replace('I', '1').split(',')))
+        expected_isentences = list(map(int, expected_sentences.replace('I', '0').replace('B', '1').split(',')))
 
         write_dataset(self.temp_dir, 'buffer', source)
 
         wildcard = os.path.join(self.temp_dir, '*.tfrecords.gz')
         files = tf.data.Dataset.list_files(wildcard, shuffle=False)
         dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
-        dataset = dataset.batch(1)
+        dataset = dataset.map(_parse_example)
 
-        params = build_hparams({
-            'bucket_bounds': [10, 20],
-            'mean_samples': 16,
-            'samples_mult': 10,
-            'word_mean': 1.,
-            'word_std': 1.,
-            'ngram_minn': 1,
-            'ngram_maxn': 1,
-            'ngram_freq': 6,
-            'lstm_units': [1]
-        })
-        dataset = dataset.map(lambda protos: _parse_examples(protos, params))
-
-        for features, labels, weights in dataset.take(1):
-            actual_document = ''.join(w.numpy().decode('utf-8') for w in features['word_tokens'].flat_values)
+        for example in dataset.take(1):
+            print(example['token'].numpy().reshape(-1).tolist())
+            actual_document = example['document'].numpy().decode('utf-8')
             self.assertEqual(actual_document, expected_document)
-            self.assertListEqual(labels['space'].numpy().reshape(-1).tolist(), expected_ispaces)
-            self.assertListEqual(labels['token'].numpy().reshape(-1).tolist(), expected_itokens)
-            self.assertListEqual(labels['sentence'].numpy().reshape(-1).tolist(), expected_isentences)
-            self.assertListEqual(weights['token'].numpy().reshape(-1).tolist(), [1.0] * 18)
+            self.assertListEqual(example['space'].numpy().reshape(-1).tolist(), expected_ispaces)
+            self.assertListEqual(example['token'].numpy().reshape(-1).tolist(), expected_itokens)
+            self.assertListEqual(example['sentence'].numpy().reshape(-1).tolist(), expected_isentences)
+            self.assertListEqual(example['token_weight'].numpy().reshape(-1).tolist(), [1.0] * 18)

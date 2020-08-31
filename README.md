@@ -26,6 +26,11 @@ This is a model development part of project.
     
     One more single sentence in paragraph.
     ```
+   
+    If you need to preserve `\n` inside the sentence, replace it with character `␊`.
+    ```
+    Single sentence␊with newline.
+    ``` 
 
     Install UDPipe and download model for your language. Or train a new one, e.g.:
     ```bash
@@ -88,3 +93,9 @@ This is a model development part of project.
 
 
 https://github.com/Koziev/rutokenizer
+
+
+TODO:
+dividers = '-./:_\'’%*−+=#&@`—―–·×′\\'
+repeaters = '.-)!?*/(":^+>,\'\\=—'
+wrappers = '()<>[]{}**--__++~~'

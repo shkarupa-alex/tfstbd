@@ -39,8 +39,6 @@
   ],
   "mean_samples": 329,
   "samples_mult": 16,
-  "word_mean": 5.514728016340921,
-  "word_std": 6.393527976525322,
   "ngram_minn": 2,
   "ngram_maxn": 5,
   "ngram_freq": 50,

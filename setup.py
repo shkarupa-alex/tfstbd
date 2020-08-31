@@ -31,10 +31,9 @@ setup(
     python_requires='>=3.6.0',
     install_requires=[
         'tensorflow>=2.3.0',
-        'tfmiss>=0.6.0',
+        'tfmiss>=0.8.1',
         'nlpvocab>=1.2.0',
-        'conllu>=2.3.2',
-        'ray[tune]>=0.8.6'
+        'conllu>=4.0'
     ],
     setup_requires=['pytest-runner'],
     tests_require=[
