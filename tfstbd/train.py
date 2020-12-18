@@ -56,11 +56,13 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
     train_ds = train_dataset(os.path.join(data_dir, 'train-*.tfrecords.gz'), h_params)
     valid_ds = train_dataset(os.path.join(data_dir, 'test-*.tfrecords.gz'), h_params)
 
-    lr_finder = None if not findlr_steps else LRFinder(findlr_steps)
+    save_options = tf.saved_model.SaveOptions(namespace_whitelist=['Miss'])
     callbacks = [
         tf.keras.callbacks.TensorBoard(os.path.join(model_dir, 'logs'), update_freq=100, profile_batch='20, 30'),
-        tf.keras.callbacks.ModelCheckpoint(os.path.join(model_dir, 'train'), monitor='loss', verbose=True)
+        tf.keras.callbacks.ModelCheckpoint(
+            os.path.join(model_dir, 'train'), monitor='loss', verbose=True, options=save_options)
     ]
+    lr_finder = None if not findlr_steps else LRFinder(findlr_steps)
     if lr_finder:
         callbacks.append(lr_finder)
 
@@ -76,7 +78,7 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
     if findlr_steps > 0:
         tf.get_logger().info('Best lr should be near: {}'.format(lr_finder.plot()))
     else:
-        tf.saved_model.save(model, os.path.join(model_dir, 'export'))
+        tf.saved_model.save(model, os.path.join(model_dir, 'export'), options=save_options)
 
     return history
 

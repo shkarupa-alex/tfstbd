@@ -53,9 +53,10 @@ def check_dataset(data_path):
                 len(sentences) != len(token_weights):
             print('Found error in inputs shapes: {} vs {} vs {} vs {} vs {}'.format(
                 len(words), len(spaces), len(tokens), len(sentences), len(token_weights)))
-            print(u'words ({}):'.format(len(words)))
-            print(u'tokens ({}):'.format(len(tokens)))
-            print(u'sentences ({}):'.format(len(sentences)))
+            print(u'documents: {}'.format(np.char.decode(documents.numpy().reshape([-1]).astype('S'), 'utf-8')))
+            print(u'words ({}): {}'.format(len(words), words))
+            print(u'tokens ({}): {}'.format(len(tokens), tokens))
+            print(u'sentences ({}): {}'.format(len(sentences), sentences))
             raise Exception('Dataset check failed')
 
         if len(samples) < 5:

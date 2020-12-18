@@ -53,7 +53,7 @@ def main():
 
     params = build_hparams(json.loads(argv.hyper_params.read()))
 
-    print('Processing training vocabulary with min freq {}'.format(params.ngram_freq))
+    print('Estimating ngram vocabulary')
     vocab = extract_vocab(argv.src_path, params)
 
     vocab.save(os.path.join(argv.src_path, 'vocab.pkl'), Vocabulary.FORMAT_BINARY_PICKLE)

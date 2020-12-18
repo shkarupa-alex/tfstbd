@@ -106,6 +106,7 @@ sentsegm/data
 .idea/
 data/
 model/
+models/
 export/
 *.pkl
 *.ipynb

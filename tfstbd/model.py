@@ -18,7 +18,7 @@ def build_model(h_params, ngram_vocab):
     normals = Lambda(lambda tok: _normalize_tokens(tok), name='normals')(tokens)
 
     shapes = WordShape(WordShape.SHAPE_ALL, name='shapes')(normals)
-    shapes = WithRagged(Dense(4, name='projections'))(shapes)
+    shapes = WithRagged(Dense(8, name='projections'))(shapes)
 
     ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self, name='ngrams')(normals)
     lookup = StringLookup(vocabulary=ngram_keys, mask_token=None, name='indexes')

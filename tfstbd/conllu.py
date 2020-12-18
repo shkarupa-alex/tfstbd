@@ -79,8 +79,8 @@ def extract_tokens(parsed, last_space=True):
     return tokens
 
 
-def extract_text(parsed, validate=True):
-    tokens = extract_tokens(parsed, last_space=False)
+def extract_text(parsed, validate=True, last_space=False):
+    tokens = extract_tokens(parsed, last_space=last_space)
     text = itertools.chain(*tokens)
     text = list(filter(len, text))
 

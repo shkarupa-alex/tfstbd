@@ -119,12 +119,16 @@ class TestRandomGlue(unittest.TestCase):
         self.assertEqual([[' ']], random_glue())
 
     def test_shape(self):
-        result = random_glue(1, 1, 1, 1)
+        result = random_glue(1, 1, 1, 0, 1)
         self.assertEqual([[' ']], result)
 
     def test_normal(self):
         result = random_glue(space=10, tab=1, newline=1, reserve=1)
         self.assertEqual([[' '], [' '], [' '], [' '], [' '], [' '], [' '], [' '], [' '], ['\t']], result)
+
+    def test_empty(self):
+        result = random_glue(space=10, tab=1, empty=1, reserve=1)
+        self.assertEqual([[' '], [' '], [' '], [''], [' '], [' '], [' '], [' '], [' '], [' '], ['\t']], result)
 
     def test_extra(self):
         result = random_glue(space=30, tab=5, newline=25, reserve=1)
@@ -146,22 +150,43 @@ class TestAugmentParagraphs(unittest.TestCase):
         ]
         expected = [
             ([[('First', ' '), ('sentence', ' '), ('in', u'\xa0'), ('paragraph', ''), ('.', ' ')],
-              [('Second', '  '), ('"', ''), ('sentence', ''), ('"', '  '), ('in', ' '), ('paragraph', ''), ('.', ' ')]],
+              [('Second', ' '), ('"', ''), ('sentence', ''), ('"', '  '), ('in', ' '), ('paragraph', ''), ('.', ' ')]],
              1.0),
-            ([[('Single', ' '), ('-', ' '), ('sentence', ''), ('.', ' ')]], 1.0),
+            ([[('Single', ' '), ('-', ' '), ('sentence', ''), ('.', '  ')]], 1.0),
         ]
         result = augment_paragraphs(source)
         self.assertEqual(expected, result)
 
     def test_spaces(self):
-        np.random.seed(1)
+        np.random.seed(11)
         source = [
             ([[('Single', ' '), ('sentence', '')],
               [('Next', ' '), ('single', ' '), ('sentence', '')]], 1.1)
         ]
         expected = [
             ([[('Single', ' '), ('sentence', ' ')],
-              [('Next', ' '), ('single', '  '), ('sentence', ' ')]], 1.1)
+              [('Next', ' '), ('single', ' '), ('sentence', '\n')]], 1.1)
+        ]
+        result = augment_paragraphs(source)
+        self.assertEqual(expected, result)
+
+    def test_empty(self):
+        np.random.seed(20)
+        source = [
+            ([[('A', ' '), ('.', '')],
+              [('B', ' '), ('!', ' ')],
+              [('C', ' '), ('?', '')],
+              [('D', ' '), ('.', ' ')],
+              [('E', ' '), ('!', '')],
+              [('F', ' '), ('?', ' ')]], 1.1)
+        ]
+        expected = [
+            ([[('A', ' '), ('.', ' ')],
+              [('B', ' '), ('!', ' ')],
+              [('C', ' '), ('?', ' ')],
+              [('D', ' '), ('.', ' ')],
+              [('E', ' '), ('!', '')],
+              [('F', ' '), ('?', '\n')]], 1.1)
         ]
         result = augment_paragraphs(source)
         self.assertEqual(expected, result)

@@ -64,32 +64,37 @@ def parse_paragraphs(file_name, token_weight):
     return result
 
 
-def random_glue(space=1, tab=0, newline=0, reserve=0):
+def random_glue(space=1, tab=0, newline=0, empty=0, reserve=0):
     if space <= 0:
         raise ValueError('Number of spaces should be positive')
 
     max_spaces0 = int((space + 1) * 0.995 * reserve)
-    num_spaces0 = np.random.randint(0, max_spaces0) if max_spaces0 > 0 else 0
+    num_spaces0 = np.random.randint(0, max_spaces0) if space > 0 and max_spaces0 > 0 else 0
 
     max_spaces1 = int((space + 1) * 0.005 * reserve)
-    num_spaces1 = np.random.randint(0, max_spaces1) if max_spaces1 > 0 else 0
+    num_spaces1 = np.random.randint(0, max_spaces1) if space > 0 and max_spaces1 > 0 else 0
 
     max_tabs = int((tab + 1) * reserve)
-    num_tabs = np.random.randint(0, max_tabs) if max_tabs > 0 else 0
+    num_tabs = np.random.randint(0, max_tabs) if tab > 0 and max_tabs > 0 else 0
 
     max_newlines0 = int((newline + 1) * 0.95 * reserve)
-    num_newlines0 = np.random.randint(0, max_newlines0) if max_newlines0 > 0 else 0
+    num_newlines0 = np.random.randint(0, max_newlines0) if newline > 0 and max_newlines0 > 0 else 0
 
     max_newlines1 = int((newline + 1) * 0.05 * reserve)
-    num_newlines1 = np.random.randint(0, max_newlines1) if max_newlines1 > 0 else 0
+    num_newlines1 = np.random.randint(0, max_newlines1) if newline > 0 and max_newlines1 > 0 else 0
+
+    max_empties = int((empty + 1) * reserve)
+    num_empties = np.random.randint(0, max_empties) if empty > 0 and max_empties > 0 else 0
 
     glue_values = [' '] * num_spaces0 + \
                   [u'\u00A0'] * num_spaces1 + \
                   ['\t'] * num_tabs + \
                   ['\n'] * num_newlines0 + \
-                  ['\r\n'] * num_newlines1
+                  ['\r\n'] * num_newlines1 + \
+                  [''] * num_empties
+
     np.random.shuffle(glue_values)
-    glue_sizes = np.random.exponential(0.5, len(glue_values))
+    glue_sizes = np.random.exponential(0.35, len(glue_values))
 
     result = [[' ']]  # At least one space should exist
     si, vi = 0, 0
@@ -103,17 +108,17 @@ def random_glue(space=1, tab=0, newline=0, reserve=0):
 
 
 def augment_paragraphs(source):
-    # TODO https://github.com/NeelShah18/emot/blob/master/emot/emo_unicode.py
     sentence_len = [len(s) for p, _ in source for s in p]
     reserve_inner = min(100000, max(100, sum(sentence_len)))
     inner_glue = cycle(random_glue(space=300, tab=1, newline=1, reserve=reserve_inner))
-    outer_glue = cycle(random_glue(space=500, tab=1, newline=5, reserve=max(10, reserve_inner // 5)))
+    outer_glue = cycle(random_glue(space=500, tab=1, newline=5, empty=5, reserve=max(10, reserve_inner // 5)))
     extra_glue = cycle(random_glue(space=500, tab=5, newline=100, reserve=max(10, reserve_inner // 10)))
+    bad_stoppers = set(',:;•©¶·')
 
     result = []
     for paragraph, token_weight in source:
         _sentences = []
-        for sentence in paragraph:
+        for si, sentence in enumerate(paragraph):
             spaces = [i for i in range(len(sentence)) if ' ' == sentence[i][1]]
             for space in spaces:
                 word_glue = next(inner_glue)
@@ -127,8 +132,22 @@ def augment_paragraphs(source):
 
                 sentence[space] = (sentence[space][0], ''.join(word_glue))
 
-            sentence_glue = next(extra_glue) if sentence[-1][0].isalnum() else next(outer_glue)
-            sentence[-1] = (sentence[-1][0], ''.join(sentence_glue))
+            if '\n' in sentence[-1][1]:
+                sentence_glue = sentence[-1][1]
+            elif sentence[-1][0].isalnum() or sentence[-1][0] in bad_stoppers:
+                sentence_glue = ''.join(next(extra_glue))
+            else:
+                curr_stop = sentence[-1][0]
+                if si == len(paragraph) - 1 or not len(paragraph[si + 1]):
+                    next_start = ''
+                else:
+                    next_start = paragraph[si + 1][0][0]
+
+                sentence_glue = ''.join(next(outer_glue))
+                if '' == sentence_glue and (curr_stop not in {'.', '!', '?'} or not next_start.isalnum()):
+                    sentence_glue = ' '
+
+            sentence[-1] = (sentence[-1][0], sentence_glue)
             _sentences.append(sentence)
         result.append((_sentences, token_weight))
 
@@ -314,12 +333,47 @@ def write_dataset(dest_path, base_name, examples_batch):
 
 
 def process_split(paragraphs, doc_size, rec_size, num_repeats, dest_path, base_name):
+    def _bad_paragraph(paragraph):
+        # Drop bad-without-context sentences like "? hello !" and "|"
+        if len(paragraph) > 1:
+            return False
+
+        sent = paragraph[0]
+        if len(sent) < 2:
+            return True
+
+        good_stoppers = set('.!?…')
+        text = ''.join(itertools.chain(*sent)).strip()
+        if text[0].isupper() and text[-1] in good_stoppers:
+            return False
+
+        if not re.match(r'.*\w{2,}.*', text):
+            return True
+
+        if text[0].isalnum() and text[-1].isalnum():
+            return True
+
+        amb_starters = set('-—"№«([―.•↑*@#–+©〈¶·‣►●◦')
+        if text[0] in amb_starters and text[-1] in good_stoppers:
+            return False
+
+        bad_starters = set('.!?,:;/_…>‼~%|\\»)]')
+        bad_stoppers = set(',•©¶·')
+        if text[0] in bad_starters or text[-1] in bad_stoppers:
+            return True
+
+        return False
+
+    paragraphs = [(p, w) for p, w in paragraphs if not _bad_paragraph(p)]
+
     if num_repeats > 1:
         num_breaks = num_repeats // 3
         _breaks = []
         if num_breaks > 0:
             print('Breaking...')
-            _breaks = [([s], w) for p, w in paragraphs for s in p] * num_breaks
+            _breaks = [([s], w) for p, w in paragraphs for s in p]
+            _breaks = [(p, w) for p, w in _breaks if not _bad_paragraph(p)]
+            _breaks = _breaks * num_breaks
 
         print('Repeating...')
         _repeats = paragraphs * (num_repeats - num_breaks)
@@ -365,7 +419,8 @@ def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, dash_we
             _token_weight *= dash_weight
 
         current_paragraphs = parse_paragraphs(file_path, _token_weight)
-        print('Found {}K paragraphs in {}'.format(len(current_paragraphs) // 1000, file_name))
+        print('Found {}K paragraphs in {} with token weight {}'.format(
+            len(current_paragraphs) // 1000, file_name, _token_weight))
 
         source_paragraphs.extend(current_paragraphs)
     print('Finished reading. Found {}K paragraphs'.format(len(source_paragraphs) // 1000))
