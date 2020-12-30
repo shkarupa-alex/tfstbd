@@ -3,8 +3,9 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from tensorflow.keras.layers import Activation, AdditiveAttention, Attention, Dense, Embedding, Lambda
+from tensorflow.keras.layers import Activation, Dense, Embedding, Lambda
 from tensorflow.keras.layers.experimental.preprocessing import StringLookup
+from tfmiss.keras.layers import AdditiveSelfAttention, MultiplicativeSelfAttention
 from tfmiss.keras.layers import CharNgams, Reduction, TemporalConvNet, ToDense, WithRagged, WordShape
 from tfmiss.text import lower_case, normalize_unicode, replace_string, split_words, zero_digits
 
@@ -39,10 +40,10 @@ def build_model(h_params, ngram_vocab):
         features = TemporalConvNet(
             h_params.tcn_filters, h_params.tcn_ksize, h_params.tcn_drop, 'same', name='tcn')(features)
 
-    if 'luong' == h_params.att_core:
-        features = Attention(dropout=h_params.att_drop, name='attention')([features, features])
-    elif 'bahdanau' == h_params.att_core:
-        features = AdditiveAttention(dropout=h_params.att_drop, name='attention')([features, features])
+    if 'add' == h_params.att_core:
+        features = AdditiveSelfAttention(dropout=h_params.att_drop, name='attention')(features)
+    elif 'mult' == h_params.att_core:
+        features = MultiplicativeSelfAttention(dropout=h_params.att_drop, name='attention')(features)
 
     dense_tokens = ToDense('', mask=False, name='dense_tokens')(tokens)
 
@@ -55,10 +56,20 @@ def build_model(h_params, ngram_vocab):
     sentence_head = Dense(1, name='sentence_logits')(features)
     sentence_head = Activation('sigmoid', dtype='float32', name='sentence')(sentence_head)
 
+    if h_params.rdw_loss:
+        rdw_weight = tf.keras.layers.Input(shape=(None,), ragged=True, name='repdivwrap', dtype=tf.float32)
+
+
     model = tf.keras.Model(
-        inputs=documents,
+        inputs=[documents] + [] if not h_params.rdw_loss else [rdw_weight],
         outputs=[dense_tokens, space_head, token_head, sentence_head]
     )
+    if h_params.rdw_loss:
+        rdw_dense = ToDense('', mask=False, name='dense_tokens')(rdw_weight)
+        rdw_diff = rdw_dense * (token_head[:, 1:, :] - token_head[:, :-1, :])
+        rdw_loss = tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(token_head), rdw_diff)
+
+        model.add_loss(rdw_loss)
 
     return model
 

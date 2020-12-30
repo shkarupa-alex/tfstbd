@@ -26,8 +26,9 @@ def build_hparams(custom):
         tcn_filters=[1],
         tcn_ksize=2,
         tcn_drop=0.1,
-        att_core='none',  # or 'luong' or 'bahdanau'
+        att_core='none',  # or 'add' or 'mult'
         att_drop=0.0,
+        rdw_loss=False,
         space_weight=[1., 1.],
         token_weight=[1., 1.],
         sentence_weight=[1., 1.],
@@ -91,7 +92,7 @@ def build_hparams(custom):
     if not 0. <= params.tcn_drop:
         raise ValueError('Bad "tcn_drop" value')
 
-    if params.att_core not in {'none', 'luong', 'bahdanau'}:
+    if params.att_core not in {'none', 'add', 'mult'}:
         raise ValueError('Bad "att_core" value')
 
     if not 0. <= params.att_drop:

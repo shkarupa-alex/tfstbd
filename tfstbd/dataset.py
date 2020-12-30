@@ -94,7 +94,7 @@ def random_glue(space=1, tab=0, newline=0, empty=0, reserve=0):
                   [''] * num_empties
 
     np.random.shuffle(glue_values)
-    glue_sizes = np.random.exponential(0.35, len(glue_values))
+    glue_sizes = np.random.exponential(0.25, len(glue_values))
 
     result = [[' ']]  # At least one space should exist
     si, vi = 0, 0
@@ -110,7 +110,7 @@ def random_glue(space=1, tab=0, newline=0, empty=0, reserve=0):
 def augment_paragraphs(source):
     sentence_len = [len(s) for p, _ in source for s in p]
     reserve_inner = min(100000, max(100, sum(sentence_len)))
-    inner_glue = cycle(random_glue(space=300, tab=1, newline=1, reserve=reserve_inner))
+    inner_glue = cycle(random_glue(space=1000, tab=1, newline=1, reserve=reserve_inner))
     outer_glue = cycle(random_glue(space=500, tab=1, newline=5, empty=5, reserve=max(10, reserve_inner // 5)))
     extra_glue = cycle(random_glue(space=500, tab=5, newline=100, reserve=max(10, reserve_inner // 10)))
     bad_stoppers = set(',:;•©¶·')
@@ -223,6 +223,37 @@ def label_paragraphs(source_paragraphs, batch_size=1024):
     return result_paragraphs
 
 
+def label_repdivwrap(documents):
+    dividers = set('-./:_\'’%*−+=#&@`—―–·×x′\\')
+    repeaters = set('.-)!?*/(":^+>,\'\\=—')
+    wrappers0 = '(<[{*-_+~'
+    wrappers1 = ')>]}*-_+~'
+
+    result = []
+    for docwords, spacelabs, toklabs, tokwghts, sentlabs in documents:
+        rdwlbl2 = [0.0] * (len(docwords) - 1)
+        pairs = zip(docwords[:-1], docwords[1:], toklabs[:-1], toklabs[1:], tokwghts[:-1])
+        for i, (wrd0, wrd1, lbl0, lbl1, tkw0) in enumerate(pairs):
+            if wrd0 in repeaters and wrd0 == wrd1 and 'J' == lbl0:
+                rdwlbl2[i] = tkw0
+
+        rdwlbl3 = [0.0] * (len(docwords) - 1)
+        triplets = zip(
+            docwords[:-2], docwords[1:-1], docwords[2:], toklabs[:-2], toklabs[1:-1], toklabs[2:], tokwghts[:-1])
+        for i, (wrd0, wrd1, wrd2, lbl0, lbl1, lbl2, tkw0) in enumerate(triplets):
+            if wrd1 in dividers and wrd0 not in dividers and wrd2 not in dividers and 'J' == lbl0 and 'J' == lbl1:
+                rdwlbl2[i] = tkw0
+                rdwlbl2[i + 1] = tkw0
+            if wrd0 in wrappers0 and wrd2 in wrappers1 and 'J' == lbl0 and 'J' == lbl1:
+                rdwlbl3[i] = tkw0
+                rdwlbl3[i + 1] = tkw0
+
+        rdwlbl23 = [max(w2, w3) for w2, w3 in zip(rdwlbl2, rdwlbl3)]
+        result.append((docwords, spacelabs, toklabs, tokwghts, rdwlbl23, sentlabs))
+
+    return result
+
+
 def make_documents(paragraphs, doc_size):
     if not tf.executing_eagerly():
         raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
@@ -289,7 +320,7 @@ def make_documents(paragraphs, doc_size):
     return dataset
 
 
-def _serialize_example(document, space_labels, token_labels, token_weights, sentence_labels):
+def _serialize_example(document, space_labels, token_labels, token_weights, repdivwrap_weights, sentence_labels):
     _doc = ''.join(document)
 
     space_labels = [s for s in space_labels if len(s)]
@@ -313,6 +344,7 @@ def _serialize_example(document, space_labels, token_labels, token_weights, sent
         'sentence': tf.train.Feature(int64_list=tf.train.Int64List(value=_senti)),
 
         'token_weight': tf.train.Feature(float_list=tf.train.FloatList(value=token_weights)),
+        'repdivwrap_weight': tf.train.Feature(float_list=tf.train.FloatList(value=repdivwrap_weights)),
     })).SerializeToString()
 
 
@@ -328,8 +360,8 @@ def write_dataset(dest_path, base_name, examples_batch):
 
     writer_options = tf.io.TFRecordOptions(compression_type='GZIP')
     with tf.io.TFRecordWriter(file_name, options=writer_options) as writer:
-        for doc, sps_lab, tok_lab, tok_wght, sent_lab in examples_batch:
-            writer.write(_serialize_example(doc, sps_lab, tok_lab, tok_wght, sent_lab))
+        for doc, sps_lab, tok_lab, tok_wght, rdw_wght, sent_lab in examples_batch:
+            writer.write(_serialize_example(doc, sps_lab, tok_lab, tok_wght, rdw_wght, sent_lab))
 
 
 def process_split(paragraphs, doc_size, rec_size, num_repeats, dest_path, base_name):
@@ -395,6 +427,7 @@ def process_split(paragraphs, doc_size, rec_size, num_repeats, dest_path, base_n
 
     print('Baking...')
     documents = make_documents(paragraphs, doc_size)
+    documents = label_repdivwrap(documents)
 
     print('Writing...')
     while len(documents):

@@ -59,7 +59,7 @@ def check_dataset(data_path):
             print(u'sentences ({}): {}'.format(len(sentences), sentences))
             raise Exception('Dataset check failed')
 
-        if len(samples) < 5:
+        if len(samples) < 10:
             samples.append(u''.join(words))
 
         del words, tokens, sentences

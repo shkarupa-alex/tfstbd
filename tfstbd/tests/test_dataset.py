@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from tfmiss.text.unicode_expand import split_words
 from ..dataset import parse_paragraphs, random_glue, augment_paragraphs, label_spaces, label_tokens
-from ..dataset import label_paragraphs, make_documents, write_dataset
+from ..dataset import label_paragraphs, label_repdivwrap, make_documents, write_dataset
 from ..input import _parse_example
 
 
@@ -158,7 +158,7 @@ class TestAugmentParagraphs(unittest.TestCase):
         self.assertEqual(expected, result)
 
     def test_spaces(self):
-        np.random.seed(11)
+        np.random.seed(5)
         source = [
             ([[('Single', ' '), ('sentence', '')],
               [('Next', ' '), ('single', ' '), ('sentence', '')]], 1.1)
@@ -170,7 +170,7 @@ class TestAugmentParagraphs(unittest.TestCase):
         result = augment_paragraphs(source)
         self.assertEqual(expected, result)
 
-    def test_empty(self):
+    def test_empty_end(self):
         np.random.seed(20)
         source = [
             ([[('A', ' '), ('.', '')],
@@ -185,7 +185,7 @@ class TestAugmentParagraphs(unittest.TestCase):
               [('B', ' '), ('!', ' ')],
               [('C', ' '), ('?', ' ')],
               [('D', ' '), ('.', ' ')],
-              [('E', ' '), ('!', '')],
+              [('E', ' '), ('!', '\xa0')],
               [('F', ' '), ('?', '\n')]], 1.1)
         ]
         result = augment_paragraphs(source)
@@ -478,6 +478,62 @@ class TestMakeDocuments(tf.test.TestCase):
             self.assertEqual(len(repaired), len([s for s in sents if len(s)]))
             self.assertEqual(len(repaired), len([t for t in toks if len(t)]))
 
+class TestLabelRepDivWrap(tf.test.TestCase):
+    def test_normal(self):
+        expected = [
+            (
+                ['I', '’', 'm', ' ', 'a', ' ', 'd', '-', 'i', '.', ' ', '-', 'I', ' ', 'a', ' ', 'n', '-'],
+                ['T', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'T', 'T', 'S', 'T', 'T', 'S', 'T', 'S', 'T', 'T'],
+                ['J', 'J', 'B', 'B', 'B', 'B', 'J', 'J', 'B', 'B', 'B', 'J', 'B', 'B', 'B', 'B', 'J', 'B'],
+                [1.0] * 18,
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                ['B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I', 'I', 'I', 'I'],
+            ),
+            (
+                ['I', '-', '-', '-', 'I', '.', 'H', ' ', ')', ')'],
+                ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'T'],
+                ['J', 'J', 'J', 'J', 'B', 'B', 'B', 'B', 'J', 'B'],
+                [0.5] * 10,
+                [0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
+                ['B', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I'],
+            ),
+            (
+                ['I', ' ', '[', '?', ']', ')', ')', ' ', '(', 'c', ')'],
+                ['T', 'S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'T', 'T'],
+                ['B', 'B', 'J', 'J', 'B', 'J', 'B', 'B', 'J', 'J', 'B'],
+                [0.1] * 11,
+                [0.0, 0.0, 0.1, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.1],
+                ['B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I'],
+            )
+        ]
+        source = [
+            (
+                ['I', '’', 'm', ' ', 'a', ' ', 'd', '-', 'i', '.', ' ', '-', 'I', ' ', 'a', ' ', 'n', '-'],
+                ['T', 'T', 'T', 'S', 'T', 'S', 'T', 'T', 'T', 'T', 'S', 'T', 'T', 'S', 'T', 'S', 'T', 'T'],
+                ['J', 'J', 'B', 'B', 'B', 'B', 'J', 'J', 'B', 'B', 'B', 'J', 'B', 'B', 'B', 'B', 'J', 'B'],
+                [1.0] * 18,
+                ['B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I', 'I', 'I', 'I'],
+            ),
+            (
+                ['I', '-', '-', '-', 'I', '.', 'H', ' ', ')', ')'],
+                ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'T'],
+                ['J', 'J', 'J', 'J', 'B', 'B', 'B', 'B', 'J', 'B'],
+                [0.5] * 10,
+                ['B', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I'],
+            ),
+            (
+                ['I', ' ', '[', '?', ']', ')', ')', ' ', '(', 'c', ')'],
+                ['T', 'S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'T', 'T'],
+                ['B', 'B', 'J', 'J', 'B', 'J', 'B', 'B', 'J', 'J', 'B'],
+                [0.1] * 11,
+                ['B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I'],
+            )
+        ]
+        result = label_repdivwrap(source)
+        documents, spaces, tokens, weights, labels, rdw = zip(*result)
+
+        self.assertEqual(expected, result)
+
 
 class TestWriteDataset(tf.test.TestCase):
     def setUp(self):
@@ -494,6 +550,7 @@ class TestWriteDataset(tf.test.TestCase):
                 ['T', 'S', 'T', 'S', 'T', 'S', 'T', 'T', '', 'T', 'S', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'T'],
                 ['B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', '', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B'],
                 [1.0] * 19,
+                [0.1] * 18,
                 ['I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', '', 'B', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I', 'I'],
             ),
             (
@@ -501,6 +558,7 @@ class TestWriteDataset(tf.test.TestCase):
                 ['S', 'T', 'T', 'T', 'T', 'T', 'S', 'T', 'S', 'T', 'S', 'T', 'T'],
                 ['B', 'B', 'I', 'I', 'I', 'I', 'B', 'B', 'B', 'B', 'B', 'B', 'B'],
                 [0.5] * 13,
+                [0.2] * 12,
                 ['I', 'I', 'I', 'I', 'I', 'I', 'I', 'B', 'I', 'I', 'I', 'I', 'I'],
             )
         ]
@@ -508,7 +566,7 @@ class TestWriteDataset(tf.test.TestCase):
         expected_document = ''.join(source[0][0])
         expected_spaces = ','.join(source[0][1]).replace(',,', ',')
         expected_tokens = ','.join(source[0][2]).replace(',,', ',')
-        expected_sentences = ','.join(source[0][4]).replace(',,', ',')
+        expected_sentences = ','.join(source[0][5]).replace(',,', ',')
         expected_ispaces = list(map(int, expected_spaces.replace('T', '0').replace('S', '1').split(',')))
         expected_itokens = list(map(int, expected_tokens.replace('B', '0').replace('I', '1').split(',')))
         expected_isentences = list(map(int, expected_sentences.replace('I', '0').replace('B', '1').split(',')))
@@ -521,7 +579,6 @@ class TestWriteDataset(tf.test.TestCase):
         dataset = dataset.map(_parse_example)
 
         for example in dataset.take(1):
-            print(example['token'].numpy().reshape(-1).tolist())
             actual_document = example['document'].numpy().decode('utf-8')
             self.assertEqual(actual_document, expected_document)
             self.assertListEqual(example['space'].numpy().reshape(-1).tolist(), expected_ispaces)

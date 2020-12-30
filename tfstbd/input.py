@@ -10,7 +10,7 @@ from .model import _normalize_tokens
 
 def train_dataset(wild_card, h_params):
     dataset = _raw_dataset(wild_card, h_params)
-    dataset = dataset.map(_separate_inputs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(lambda e: _separate_inputs(e, h_params), num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     return dataset
@@ -56,6 +56,7 @@ def _parse_example(protos):
         'sentence': tf.io.RaggedFeature(tf.int64),
 
         'token_weight': tf.io.RaggedFeature(tf.float32),
+        'repdivwrap_weight': tf.io.RaggedFeature(tf.float32),
     })
     example['length'] = tf.cast(example['length'], tf.int32)
     example['space'] = tf.expand_dims(example['space'], axis=-1)
@@ -65,13 +66,15 @@ def _parse_example(protos):
     return example
 
 
-def _separate_inputs(examples):
+def _separate_inputs(examples, h_params):
     features = {'documents': examples['document']}
     labels = {
         'space': examples['space'],
         'token': examples['token'],
         'sentence': examples['sentence']
     }
+    if h_params.rdw_loss:
+        labels['repdivwrap'] = examples['repdivwrap_weight']
     weights = {'token': examples['token_weight']}
 
     return features, labels, weights
