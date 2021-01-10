@@ -61,14 +61,16 @@ def build_model(h_params, ngram_vocab):
 
 
     model = tf.keras.Model(
-        inputs=[documents] + [] if not h_params.rdw_loss else [rdw_weight],
+        inputs=[documents] + ([] if not h_params.rdw_loss else [rdw_weight]),
         outputs=[dense_tokens, space_head, token_head, sentence_head]
     )
     if h_params.rdw_loss:
-        rdw_dense = ToDense('', mask=False, name='dense_tokens')(rdw_weight)
-        rdw_diff = rdw_dense * (token_head[:, 1:, :] - token_head[:, :-1, :])
-        rdw_loss = tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(token_head), rdw_diff)
+        def _rdw(a):
+            rdw_dense = ToDense(0.0, mask=False, name='dense_tokens')(a[0])
+            rdw_diff = tf.expand_dims(rdw_dense, axis=-1) * (a[1][:, 1:, :] - a[1][:, :-1, :])
+            return tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(rdw_diff), rdw_diff)
 
+        rdw_loss = tf.keras.layers.Lambda(_rdw)([rdw_weight, token_head])
         model.add_loss(rdw_loss)
 
     return model

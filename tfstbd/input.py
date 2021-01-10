@@ -74,7 +74,7 @@ def _separate_inputs(examples, h_params):
         'sentence': examples['sentence']
     }
     if h_params.rdw_loss:
-        labels['repdivwrap'] = examples['repdivwrap_weight']
+        features['repdivwrap'] = examples['repdivwrap_weight']
     weights = {'token': examples['token_weight']}
 
     return features, labels, weights
