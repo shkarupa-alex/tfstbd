@@ -12,7 +12,7 @@
   "lstm_units": [
     192
   ],
-  "rdw_loss": True,
+  "rdw_loss": true,
   "space_weight": [
     0.89706192,
     1.12962473

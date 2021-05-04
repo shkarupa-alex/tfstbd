@@ -28,7 +28,7 @@ def build_hparams(custom):
         tcn_drop=0.1,
         att_core='none',  # or 'add' or 'mult'
         att_drop=0.0,
-        rdw_loss=False,
+        rdw_loss=True,
         space_weight=[1., 1.],
         token_weight=[1., 1.],
         sentence_weight=[1., 1.],

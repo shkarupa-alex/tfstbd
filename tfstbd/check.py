@@ -32,11 +32,12 @@ def check_dataset(data_path):
     sps_class, tok_class, sent_class = Counter(), Counter(), Counter()
     samples = []
     for features, labels, weights in dataset:
-        documents, spaces, tokens, sentences, token_weights = \
+        documents, spaces, tokens, sentences, repdivwrap, token_weights = \
             features['documents'], \
             labels['space'].numpy().reshape([-1]), \
             labels['token'].numpy().reshape([-1]), \
             labels['sentence'].numpy().reshape([-1]), \
+            labels['repdivwrap'].numpy().reshape([-1]), \
             weights['token'].numpy().reshape([-1])
 
         words = split_words(documents, extended=True)
@@ -50,13 +51,15 @@ def check_dataset(data_path):
         if len(words) != len(spaces) or \
                 len(spaces) != len(tokens) or \
                 len(tokens) != len(sentences) or \
-                len(sentences) != len(token_weights):
-            print('Found error in inputs shapes: {} vs {} vs {} vs {} vs {}'.format(
-                len(words), len(spaces), len(tokens), len(sentences), len(token_weights)))
+                len(sentences) != len(repdivwrap) or \
+                len(repdivwrap) != len(token_weights):
+            print('Found error in inputs shapes: {} vs {} vs {} vs {} vs {} vs {}'.format(
+                len(words), len(spaces), len(tokens), len(sentences), len(repdivwrap), len(token_weights)))
             print(u'documents: {}'.format(np.char.decode(documents.numpy().reshape([-1]).astype('S'), 'utf-8')))
             print(u'words ({}): {}'.format(len(words), words))
             print(u'tokens ({}): {}'.format(len(tokens), tokens))
             print(u'sentences ({}): {}'.format(len(sentences), sentences))
+            print(u'repdivwrap ({}): {}'.format(len(repdivwrap), repdivwrap))
             raise Exception('Dataset check failed')
 
         if len(samples) < 10:

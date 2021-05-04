@@ -41,7 +41,7 @@ def build_model(h_params, ngram_vocab):
             h_params.tcn_filters, h_params.tcn_ksize, h_params.tcn_drop, 'same', name='tcn')(features)
 
     if 'add' == h_params.att_core:
-        features = AdditiveSelfAttention(dropout=h_params.att_drop, name='attention')(features)
+        features = AdditiveSelfAttention(32, dropout=h_params.att_drop, name='attention')(features)
     elif 'mult' == h_params.att_core:
         features = MultiplicativeSelfAttention(dropout=h_params.att_drop, name='attention')(features)
 
@@ -59,14 +59,13 @@ def build_model(h_params, ngram_vocab):
     if h_params.rdw_loss:
         rdw_weight = tf.keras.layers.Input(shape=(None,), ragged=True, name='repdivwrap', dtype=tf.float32)
 
-
     model = tf.keras.Model(
         inputs=[documents] + [] if not h_params.rdw_loss else [rdw_weight],
         outputs=[dense_tokens, space_head, token_head, sentence_head]
     )
     if h_params.rdw_loss:
-        rdw_dense = ToDense('', mask=False, name='dense_tokens')(rdw_weight)
-        rdw_diff = rdw_dense * (token_head[:, 1:, :] - token_head[:, :-1, :])
+        rdw_dense = ToDense(0.0, mask=False, name='dense_tokens')(rdw_weight)
+        rdw_diff = rdw_dense[:, :-1, :] * (token_head[:, 1:, :] - token_head[:, :-1, :])
         rdw_loss = tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(token_head), rdw_diff)
 
         model.add_loss(rdw_loss)

@@ -226,29 +226,34 @@ def label_paragraphs(source_paragraphs, batch_size=1024):
 def label_repdivwrap(documents):
     dividers = set('-./:_\'’%*−+=#&@`—―–·×x′\\')
     repeaters = set('.-)!?*/(":^+>,\'\\=—')
-    wrappers0 = '(<[{*-_+~'
-    wrappers1 = ')>]}*-_+~'
+    wrappers0 = set('(<[{*-_+~')
+    wrappers1 = set(')>]}*-_+~')
+    wrappers = wrappers0 | wrappers1
 
     result = []
     for docwords, spacelabs, toklabs, tokwghts, sentlabs in documents:
-        rdwlbl2 = [0.0] * (len(docwords) - 1)
-        pairs = zip(docwords[:-1], docwords[1:], toklabs[:-1], toklabs[1:], tokwghts[:-1])
-        for i, (wrd0, wrd1, lbl0, lbl1, tkw0) in enumerate(pairs):
+        rdwlbl2 = [0.0] * len(docwords)
+        pairs = zip(docwords[:-1], docwords[1:], toklabs[:-1], tokwghts[:-1])
+        for i, (wrd0, wrd1, lbl0, tkw0) in enumerate(pairs):
             if wrd0 in repeaters and wrd0 == wrd1 and 'J' == lbl0:
                 rdwlbl2[i] = tkw0
 
-        rdwlbl3 = [0.0] * (len(docwords) - 1)
+        rdwlbl3 = [0.0] * len(docwords)
         triplets = zip(
-            docwords[:-2], docwords[1:-1], docwords[2:], toklabs[:-2], toklabs[1:-1], toklabs[2:], tokwghts[:-1])
-        for i, (wrd0, wrd1, wrd2, lbl0, lbl1, lbl2, tkw0) in enumerate(triplets):
-            if wrd1 in dividers and wrd0 not in dividers and wrd2 not in dividers and 'J' == lbl0 and 'J' == lbl1:
+            docwords[:-2], docwords[1:-1], docwords[2:], spacelabs[:-2], spacelabs[1:-1], spacelabs[2:],
+            toklabs[:-2], toklabs[1:-1], tokwghts[:-1])
+        for i, (wrd0, wrd1, wrd2, sps0, sps1, sps2, lbl0, lbl1, tkw0) in enumerate(triplets):
+            if 'S' == sps0 or 'S' == sps1 or 'S' == sps2:
+                continue
+            if wrd1 in dividers and wrd0 not in dividers and wrd2 not in dividers and lbl0 == lbl1:
                 rdwlbl2[i] = tkw0
                 rdwlbl2[i + 1] = tkw0
-            if wrd0 in wrappers0 and wrd2 in wrappers1 and 'J' == lbl0 and 'J' == lbl1:
+            if wrd0 in wrappers0 and wrd1 not in wrappers and wrd2 in wrappers1 and lbl0 == lbl1:
                 rdwlbl3[i] = tkw0
                 rdwlbl3[i + 1] = tkw0
-
-        rdwlbl23 = [max(w2, w3) for w2, w3 in zip(rdwlbl2, rdwlbl3)]
+        rdwlbl23 = [max(w2, w3) for w2, w3, wrd in zip(rdwlbl2, rdwlbl3, docwords) if len(wrd)]
+        if len(rdwlbl23) != len(tokwghts):
+            raise ValueError('Wrong repdivwrap size')
         result.append((docwords, spacelabs, toklabs, tokwghts, rdwlbl23, sentlabs))
 
     return result
@@ -325,6 +330,7 @@ def _serialize_example(document, space_labels, token_labels, token_weights, repd
 
     space_labels = [s for s in space_labels if len(s)]
     token_weights = [w for w, s in zip(token_weights, token_labels) if len(s)]
+    repdivwrap_weights = [w for w, s in zip(repdivwrap_weights, token_labels) if len(s)]
     token_labels = [s for s in token_labels if len(s)]
     if len(token_weights) != len(token_labels):
         raise ValueError('Sizes of weights and labels should be equal')
