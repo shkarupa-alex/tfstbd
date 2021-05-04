@@ -76,9 +76,13 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
     )
 
     if findlr_steps > 0:
-        tf.get_logger().info('Best lr should be near: {}'.format(lr_finder.plot()))
+        print(lr_finder.plot())
+        min_lr, graph_name = lr_finder.plot()
+        tf.get_logger().info('Best lr should be near: {}'.format(min_lr))
+        tf.get_logger().info('Best lr graph saved to: {}'.format(graph_name))
     else:
-        tf.saved_model.save(model, os.path.join(model_dir, 'export'), options=save_options)
+        em = tf.keras.Model(inputs=model.inputs[0], outputs=model.outputs[0])
+        tf.saved_model.save(em, os.path.join(model_dir, 'export'), options=save_options)
 
     return history
 
