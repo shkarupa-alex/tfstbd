@@ -1,21 +1,25 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import argparse
+import copy
 import itertools
 import os
 import numpy as np
 import re
-import six
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from conllu import parse
 from itertools import cycle
 from tfmiss.text.unicode_expand import split_words
-from .conllu import repair_spaces, extract_tokens, extract_text, split_sent
+from typing import List, Tuple, Union
+from .conllu import repair_spaces, extract_tokens, extract_text, split_sents
+
+Paragraphs = List[Tuple[List[List[Tuple[str, str]]], float]]
+LabledParagraphs = List[Tuple[List[Tuple[List[str], List[str], List[str], List[str]]], float]]
+LabeledDocuments = List[Tuple[List[str], List[str], List[str], List[float], List[str], List[str]]]
 
 
-def parse_paragraphs(file_name, token_weight):
+def parse_paragraphs(file_name: str, token_weight: float) -> Paragraphs:
+    # Parse CoNLL-U file and separate paragraphs
+
     with open(file_name, 'rb') as f:
         content = '\n' + f.read().decode('utf-8')
 
@@ -23,29 +27,27 @@ def parse_paragraphs(file_name, token_weight):
     content = content.replace('\n# newpar\n', '\n# newpar id = 0\n')
     has_groups = False
 
-    paragraphs = []
-    paragraph = []
+    paragraphs, current = [], []
     for block in parse(content):
-        meta = ' '.join(six.iterkeys(block.metadata))
-
+        meta = ' '.join(block.metadata.keys())
         start_group = 'newdoc id' in meta or 'newpar id' in meta
         has_groups = has_groups or start_group
 
-        if len(paragraph) and (not has_groups or start_group):
-            paragraphs.append((paragraph, token_weight))
-            paragraph = []
+        if len(current) and (not has_groups or start_group):
+            paragraphs.append((current, token_weight))
+            current = []
 
         block = repair_spaces(block)
-        sentence = extract_text(block)  # validate
-        if not len(sentence):
+        text = extract_text(block, validate=True)
+        if not len(text):
             continue
 
-        sent_parts = split_sent(block)
+        sent_parts = split_sents(block)
         sent_texts = [extract_tokens(p, last_space=False) for p in sent_parts]
-        paragraph.extend(sent_texts)
+        current.extend(sent_texts)
 
-    if len(paragraph):
-        paragraphs.append((paragraph, token_weight))
+    if len(current):
+        paragraphs.append((current, token_weight))
 
     result = []
     duplicates = set()
@@ -64,9 +66,44 @@ def parse_paragraphs(file_name, token_weight):
     return result
 
 
-def random_glue(space=1, tab=0, newline=0, empty=0, reserve=0):
-    if space <= 0:
-        raise ValueError('Number of spaces should be positive')
+def good_paragraphs(paragraphs: Paragraphs) -> Paragraphs:
+    # Drop bad-without-context sentences like "? hello !" and "|"
+
+    def _bad(par):
+        if len(par) > 1:
+            return False
+
+        sent = par[0]
+        if len(sent) < 2:
+            return True
+
+        text = ''.join(itertools.chain(*sent)).strip()
+
+        if not re.match(r'.*\w{2,}.*', text):
+            return True
+
+        good_stoppers = set('.!?…')
+        if text[0].isupper() and text[-1] in good_stoppers:
+            return False
+
+        amb_starters = set('-—"№«([―.•↑*@#–+©〈¶·‣►●◦')
+        if text[0] in amb_starters and text[-1] in good_stoppers:
+            return False
+
+        bad_starters = set('.!?,:;/_…>‼~%|\\»)]')
+        bad_stoppers = set(',•©¶·')
+        if text[0] in bad_starters or text[-1] in bad_stoppers:
+            return True
+
+        return False
+
+    return [(p, w) for p, w in paragraphs if not _bad(p)]
+
+
+def random_glue(space: int = 1, tab: int = 0, newline: int = 0, empty: int = 0, reserve: int = 0) -> List[List[str]]:
+    # Generate random spaces with random size
+
+    assert space > 0, 'Number of spaces should be positive'
 
     max_spaces0 = int((space + 1) * 0.995 * reserve)
     num_spaces0 = np.random.randint(0, max_spaces0) if space > 0 and max_spaces0 > 0 else 0
@@ -87,7 +124,7 @@ def random_glue(space=1, tab=0, newline=0, empty=0, reserve=0):
     num_empties = np.random.randint(0, max_empties) if empty > 0 and max_empties > 0 else 0
 
     glue_values = [' '] * num_spaces0 + \
-                  [u'\u00A0'] * num_spaces1 + \
+                  ['\u00A0'] * num_spaces1 + \
                   ['\t'] * num_tabs + \
                   ['\n'] * num_newlines0 + \
                   ['\r\n'] * num_newlines1 + \
@@ -107,54 +144,53 @@ def random_glue(space=1, tab=0, newline=0, empty=0, reserve=0):
     return result
 
 
-def augment_paragraphs(source):
-    sentence_len = [len(s) for p, _ in source for s in p]
-    reserve_inner = min(100000, max(100, sum(sentence_len)))
+def augment_paragraphs(raw_paragraphs: Paragraphs) -> Paragraphs:
+    # Randomly replace spaces between tokens and sentences
+
+    sentence_len = sum([len(s) for p, _ in raw_paragraphs for s in p])
+    reserve_inner = min(100000, max(100, sentence_len))
     inner_glue = cycle(random_glue(space=1000, tab=1, newline=1, reserve=reserve_inner))
     outer_glue = cycle(random_glue(space=500, tab=1, newline=5, empty=5, reserve=max(10, reserve_inner // 5)))
     extra_glue = cycle(random_glue(space=500, tab=5, newline=100, reserve=max(10, reserve_inner // 10)))
     bad_stoppers = set(',:;•©¶·')
 
-    result = []
-    for paragraph, token_weight in source:
-        _sentences = []
+    aug_paragraphs = []
+    for paragraph, token_weight in raw_paragraphs:
+        paragraph_ = []
         for si, sentence in enumerate(paragraph):
-            spaces = [i for i in range(len(sentence)) if ' ' == sentence[i][1]]
-            for space in spaces:
-                word_glue = next(inner_glue)
-
-                if ''.join(word_glue) == ' ':
-                    continue
-                if ''.join(word_glue) == '' and \
-                        sentence[space][0][-1].isalnum() and \
-                        sentence[space + 1][0][0].isalnum():
+            spaces = [k for k, (_, s) in enumerate(sentence[:-1]) if ' ' == s]
+            for k in spaces:
+                word_glue = ''.join(next(inner_glue))
+                if ' ' == word_glue:
                     continue
 
-                sentence[space] = (sentence[space][0], ''.join(word_glue))
+                curr_token = sentence[k][0]
+                next_token = sentence[k + 1][0]
+                if '' == word_glue and curr_token[-1].isalnum() and next_token[0].isalnum():
+                    continue
 
-            if '\n' in sentence[-1][1]:
-                sentence_glue = sentence[-1][1]
-            elif sentence[-1][0].isalnum() or sentence[-1][0] in bad_stoppers:
-                sentence_glue = ''.join(next(extra_glue))
+                sentence[k] = (curr_token, word_glue)
+
+            last_token, last_space = sentence[-1]
+            if '\n' in last_space:
+                sent_glue = last_space
+            elif last_token[-1].isalnum() or last_token[-1] in bad_stoppers:
+                sent_glue = ''.join(next(extra_glue))
             else:
-                curr_stop = sentence[-1][0]
-                if si == len(paragraph) - 1 or not len(paragraph[si + 1]):
-                    next_start = ''
-                else:
-                    next_start = paragraph[si + 1][0][0]
+                sent_glue = ''.join(next(outer_glue))
+                next_token = ' ' if si == len(paragraph) - 1 else paragraph[si + 1][0][0]
+                if '' == sent_glue and (last_token[-1] not in {'.', '!', '?'} or not next_token[0].isalnum()):
+                    sent_glue = ' '
+            sentence[-1] = (last_token, sent_glue)
+            paragraph_.append(sentence)
+        aug_paragraphs.append((paragraph_, token_weight))
 
-                sentence_glue = ''.join(next(outer_glue))
-                if '' == sentence_glue and (curr_stop not in {'.', '!', '?'} or not next_start.isalnum()):
-                    sentence_glue = ' '
-
-            sentence[-1] = (sentence[-1][0], sentence_glue)
-            _sentences.append(sentence)
-        result.append((_sentences, token_weight))
-
-    return result
+    return aug_paragraphs
 
 
-def label_spaces(source, target):
+def label_spaces(source: List[str], target: List[Tuple[str, str]]) -> List[str]:
+    # Estimate space labels
+
     target_labels = ''.join(['T' * len(p[0]) + 'S' * len(p[1]) for p in target])
 
     source_len = [len(w) for w in source]
@@ -162,15 +198,16 @@ def label_spaces(source, target):
 
     # Use first character label from source
     labels = [target_labels[i] for i in source_acc]
-    if len(source) != len(labels):
-        raise AssertionError('Size of labels should be equal to size of source')
+    assert len(source) == len(labels), 'Size of labels should be equal to size of source'
 
     return labels
 
 
-def label_tokens(source, target):
-    if ''.join(target) != ''.join(source):
-        raise ValueError('Joined sources and target tokens should be equal')
+def label_tokens(source: List[str], target: List[Tuple[str, str]]) -> List[str]:
+    # Estimate token labels
+
+    target = list(itertools.chain(*target))
+    assert ''.join(target) == ''.join(source), 'Joined sources and target tokens should be equal'
 
     if not len(target):
         return []
@@ -183,301 +220,247 @@ def label_tokens(source, target):
 
     # Break label if same break in target and source at the same time
     labels = ['B' if sum(source_len[:i + 1]) in same_split else 'I' for i in range(len(source_len))]
-    if len(source) != len(labels):
-        raise AssertionError('Joined sources and labels should be equal')
+    assert len(source) == len(labels), 'Joined sources and labels should be equal'
 
     return ['B'] + labels[:-1]  # shift right
 
 
-def label_paragraphs(source_paragraphs, batch_size=1024):
-    if not tf.executing_eagerly():
-        raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
+def label_repdivwrap(words: List[str], spaces: List[str], tokens: List[str]) -> List[str]:
+    # Estimate repeat/divide/wrap labels
 
-    # Sort by tokens count for lower memory consumption
-    source_paragraphs = sorted(source_paragraphs, key=lambda p: sum([len(s) for s in p[0]]), reverse=True)
-
-    _batch_size = 1
-    result_paragraphs = []
-    while len(source_paragraphs):
-        # Smaller batch size for longer sentences
-        _batch_size = min(_batch_size + 1, batch_size)
-
-        pipeline_todo, source_paragraphs = source_paragraphs[:_batch_size], source_paragraphs[_batch_size:]
-        pipeline_input = [[''.join(itertools.chain(*s)) for s in p] for p, _ in pipeline_todo]
-        pipeline_done = split_words(tf.ragged.constant(pipeline_input), extended=True).to_list()
-        if len(pipeline_done) != len(pipeline_input):
-            raise AssertionError('Sizes of paragraphs before and after split should be equal')
-
-        for done_prgr, (src_prgr, src_wght) in zip(pipeline_done, pipeline_todo):
-            paragraph = []
-            for done_sent, src_sent in zip(done_prgr, src_prgr):
-                done_sent = [w.decode('utf-8') for w in done_sent if len(w)]
-                token_labels = label_tokens(done_sent, list(itertools.chain(*src_sent)))
-                space_labels = label_spaces(done_sent, src_sent)
-                paragraph.append((done_sent, space_labels, token_labels))
-
-            if not len(paragraph):
-                raise AssertionError('Paragraph could not be empty')
-            result_paragraphs.append((paragraph, src_wght))
-
-    return result_paragraphs
-
-
-def label_repdivwrap(documents):
-    dividers = set('-./:_\'’%*−+=#&@`—―–·×x′\\')
     repeaters = set('.-)!?*/(":^+>,\'\\=—')
+    dividers = set('-./:_\'’%*−+=#&@`—―–·×x′\\')
     wrappers0 = set('(<[{*-_+~')
     wrappers1 = set(')>]}*-_+~')
     wrappers = wrappers0 | wrappers1
 
-    result = []
-    for docwords, spacelabs, toklabs, tokwghts, sentlabs in documents:
-        rdwlbl2 = [0.0] * len(docwords)
-        pairs = zip(docwords[:-1], docwords[1:], toklabs[:-1], tokwghts[:-1])
-        for i, (wrd0, wrd1, lbl0, tkw0) in enumerate(pairs):
-            if wrd0 in repeaters and wrd0 == wrd1 and 'J' == lbl0:
-                rdwlbl2[i] = tkw0
+    result = ['N'] * len(words)
 
-        rdwlbl3 = [0.0] * len(docwords)
-        triplets = zip(
-            docwords[:-2], docwords[1:-1], docwords[2:], spacelabs[:-2], spacelabs[1:-1], spacelabs[2:],
-            toklabs[:-2], toklabs[1:-1], tokwghts[:-1])
-        for i, (wrd0, wrd1, wrd2, sps0, sps1, sps2, lbl0, lbl1, tkw0) in enumerate(triplets):
-            if 'S' == sps0 or 'S' == sps1 or 'S' == sps2:
-                continue
-            if wrd1 in dividers and wrd0 not in dividers and wrd2 not in dividers and lbl0 == lbl1:
-                rdwlbl2[i] = tkw0
-                rdwlbl2[i + 1] = tkw0
-            if wrd0 in wrappers0 and wrd1 not in wrappers and wrd2 in wrappers1 and lbl0 == lbl1:
-                rdwlbl3[i] = tkw0
-                rdwlbl3[i + 1] = tkw0
-        rdwlbl23 = [max(w2, w3) for w2, w3, wrd in zip(rdwlbl2, rdwlbl3, docwords) if len(wrd)]
-        if len(rdwlbl23) != len(tokwghts):
-            raise ValueError('Wrong repdivwrap size')
-        result.append((docwords, spacelabs, toklabs, tokwghts, rdwlbl23, sentlabs))
+    triplets = zip(words[:-2], words[1:-1], words[2:], spaces[:-2], spaces[1:-1], spaces[2:], tokens[:-2], tokens[1:-1])
+    for i, (wrd0, wrd1, wrd2, sps0, sps1, sps2, lbl0, lbl1) in enumerate(triplets):
+        if not 'T' == sps0 == sps1 == sps2:
+            continue
+
+        if wrd0 in repeaters and wrd0 == wrd1 == wrd2 and lbl0 == lbl1:
+            result[i] = 'R'
+            result[i + 1] = 'R'
+
+        if wrd1 in dividers and wrd0 != wrd1 and wrd1 != wrd2 and lbl0 == lbl1:
+            result[i] = 'D'
+            result[i + 1] = 'D'
+
+        if wrd0 in wrappers0 and wrd2 in wrappers1 and wrd1 not in wrappers and lbl0 == lbl1:
+            result[i] = 'W'
+            result[i + 1] = 'W'
 
     return result
 
 
-def make_documents(paragraphs, doc_size):
-    if not tf.executing_eagerly():
-        raise EnvironmentError('Only TensorFlow with eager mode enabled by default supported')
+def label_paragraphs(source: Paragraphs, batch_size: int = 1024) -> LabledParagraphs:
+    # Estimate labels for paragraphs
+
+    # Sort by tokens count for lower memory consumption
+    source = sorted(source, key=lambda p: sum([len(s) for s in p[0]]), reverse=True)
+
+    _batch_size = 1
+    result = []
+    while len(source):
+        # Smaller batch size for longer sentences
+        _batch_size = min(_batch_size + 1, batch_size)
+
+        todo, source = source[:_batch_size], source[_batch_size:]
+        flat = [[''.join(itertools.chain(*s)) for s in p] for p, _ in todo]
+        done = split_words(tf.ragged.constant(flat), extended=True).to_list()
+        assert len(done) == len(flat), 'Sizes of paragraphs before and after split should be equal'
+
+        for done_par, (src_par, src_weight) in zip(done, todo):
+            paragraph = []
+            for done_sent, src_sent in zip(done_par, src_par):
+                done_sent = [w.decode('utf-8') for w in done_sent if len(w)]
+                space_labels = label_spaces(done_sent, src_sent)
+                token_labels = label_tokens(done_sent, src_sent)
+                rediwr_labels = label_repdivwrap(done_sent, space_labels, token_labels)
+                paragraph.append((done_sent, space_labels, token_labels, rediwr_labels))
+
+            assert len(paragraph), 'Paragraph could not be empty'
+            result.append((paragraph, src_weight))
+
+    return result
+
+
+def make_documents(paragraphs: LabledParagraphs, doc_size: int) -> LabeledDocuments:
+    # Combine labeled paragraphs into labeled documents
 
     documents = []
-    spaces = []
-    tokens = []
-    weights = []
-    sentences = []
-
-    while len(paragraphs) > 0:
+    while len(paragraphs):
         sample_words = []
         sample_spaces = []
         sample_tokens = []
         sample_weights = []
+        sample_rediwrs = []
         sample_sentences = []
 
-        while len(sample_words) < doc_size and len(paragraphs) > 0:
-            curr_prgr, weight = paragraphs.pop()
+        while len(sample_words) < doc_size and len(paragraphs):
+            curr_par, weight = paragraphs.pop()
 
-            for sent_words, sent_spaces, sent_tokens in curr_prgr:
-                if len(sample_words) and not sent_words[0][0].isalnum():
+            for sent_words, sent_spaces, sent_tokens, sent_rediwr in curr_par:
+                assert len(sent_words), 'Sentence could not be empty'
+
+                word_print = [c.isprintable() and not c.isspace() for c in ''.join(sent_words)]
+                if not any(word_print):
+                    continue
+
+                if len(sample_words):
                     prev_word = sample_words[-1]
                     next_word = sent_words[0]
-                    split_size = tf.size(split_words(
-                        prev_word + next_word,
-                        extended=True
-                    )).numpy()
+                    split_size = tf.size(split_words(prev_word + next_word, extended=True)).numpy()
                     if split_size != 2:
-                        if 1 != split_size:
-                            raise AssertionError('Unexpected split size')
+                        assert 1 == split_size, 'Unexpected split size'
                         sample_spaces[-1] = ''
                         sample_tokens[-1] = ''
+                        sample_weights[-1] = -1.
+                        sample_rediwrs[-1] = ''
                         sample_sentences[-1] = ''
-
-                word_print = [any([c.isprintable() and not c.isspace() for c in w]) for w in sent_words]
-                if True not in word_print:
-                    continue
 
                 sample_words.extend(sent_words)
                 sample_spaces.extend(sent_spaces)
                 sample_tokens.extend(sent_tokens)
-                sample_weights.extend([weight] * len(sent_tokens))
+                sample_weights.extend([weight] * len(sent_words))
+                sample_rediwrs.extend(sent_rediwr)
 
-                sent_breaks = ['I'] * len(sent_words)
-                if len(sent_words):
-                    sent_breaks[0] = 'B'
+                sent_breaks = ['B'] + ['I'] * (len(sent_words) - 1)
                 sample_sentences.extend(sent_breaks)
 
-        if not (len(sample_words) == len(sample_tokens) ==
-                len(sample_spaces) == len(sample_weights) == len(sample_sentences)):
-            raise AssertionError('Sequence and it\'s labels should have same size')
+        assert len(sample_words) == len(sample_spaces) == len(sample_tokens) == len(sample_weights) == \
+               len(sample_rediwrs) == len(sample_sentences), 'Sequence and it\'s labels should have same size'
 
-        documents.append(sample_words)
-        spaces.append(sample_spaces)
-        tokens.append(sample_tokens)
-        weights.append(sample_weights)
-        sentences.append(sample_sentences)
+        documents.append((sample_words, sample_spaces, sample_tokens, sample_weights, sample_rediwrs, sample_sentences))
 
-    if not (len(spaces) == len(tokens) == len(weights) == len(sentences)):
-        raise AssertionError('Sequence and it\'s labels should have same size')
-    dataset = list(zip(documents, spaces, tokens, weights, sentences))
-
-    return dataset
+    return documents
 
 
-def _serialize_example(document, space_labels, token_labels, token_weights, repdivwrap_weights, sentence_labels):
-    _doc = ''.join(document)
+class STBDDataset(tfds.core.GeneratorBasedBuilder):
+    VERSION = tfds.core.Version('1.0.0')
+    RELEASE_NOTES = {'1.0.0': 'Initial release.'}
 
-    space_labels = [s for s in space_labels if len(s)]
-    token_weights = [w for w, s in zip(token_weights, token_labels) if len(s)]
-    repdivwrap_weights = [w for w, s in zip(repdivwrap_weights, token_labels) if len(s)]
-    token_labels = [s for s in token_labels if len(s)]
-    if len(token_weights) != len(token_labels):
-        raise ValueError('Sizes of weights and labels should be equal')
+    def __init__(self, *, source_dirs, data_dir, doc_size, dash_weight, num_repeats, test_re, config=None,
+                 version=None):
+        super().__init__(data_dir=data_dir, config=config, version=version)
 
-    sentence_labels = [s for s in sentence_labels if len(s)]
+        if isinstance(source_dirs, str):
+            source_dirs = [source_dirs]
+        assert isinstance(source_dirs, list), 'A list expected for source directories'
+        source_dirs = [os.fspath(s) for s in source_dirs]
 
-    _spsi = [0 if 'T' == s else 1 for s in space_labels]  # 0 == TOKEN, 1 == SPACE
-    _toki = [0 if 'B' == s else 1 for s in token_labels]  # 0 == BEGIN, 1 == INSIDE
-    _senti = [0 if 'I' == s else 1 for s in sentence_labels]  # 0 == INSIDE, 1 == BEGIN
+        bad = [s for s in source_dirs if not os.path.isdir(s)]
+        assert not bad, 'Some of source directories do not exist: {}'.format(bad)
 
-    return tf.train.Example(features=tf.train.Features(feature={
-        'document': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.compat.as_bytes(_doc)])),
-        'length': tf.train.Feature(int64_list=tf.train.Int64List(value=[len(space_labels)])),
+        self.source_dirs = source_dirs
+        self.doc_size = doc_size
+        self.dash_weight = dash_weight
+        self.num_repeats = num_repeats
+        self.test_re = test_re
 
-        'space': tf.train.Feature(int64_list=tf.train.Int64List(value=_spsi)),
-        'token': tf.train.Feature(int64_list=tf.train.Int64List(value=_toki)),
-        'sentence': tf.train.Feature(int64_list=tf.train.Int64List(value=_senti)),
+    def _info(self) -> tfds.core.DatasetInfo:
+        return tfds.core.DatasetInfo(
+            builder=self,
+            description='Sentence & token boundary detection dataset',
+            features=tfds.features.FeaturesDict({
+                'document': tfds.features.Text(),
+                'length': tfds.features.Tensor(shape=(), dtype=tf.int32),
+                'space': tfds.features.Text(),
+                'token': tfds.features.Text(),
+                'weight': tfds.features.Tensor(shape=(None,), dtype=tf.float32),
+                'repdivwrap': tfds.features.Text(),
+                'sentence': tfds.features.Text(),
+            })
+        )
 
-        'token_weight': tf.train.Feature(float_list=tf.train.FloatList(value=token_weights)),
-        'repdivwrap_weight': tf.train.Feature(float_list=tf.train.FloatList(value=repdivwrap_weights)),
-    })).SerializeToString()
+    def _split_generators(self, dl_manager: tfds.download.DownloadManager):
+        return {
+            'test': self._generate_examples(False),
+            'train': self._generate_examples(True),
+        }
 
+    def _generate_examples(self, training):
+        for source_dir in self.source_dirs:
+            print('Processing directory {}'.format(source_dir))
+            backup = []
 
-def write_dataset(dest_path, base_name, examples_batch):
-    os.makedirs(dest_path, exist_ok=True)
+            for file_path in self._iterate_source(source_dir, training):
+                print('Parsing file {}'.format(file_path))
 
-    exist_pattern = base_name + r'-(\d+).tfrecords.gz'
-    exist_records = [f for f in os.listdir(dest_path) if re.match(exist_pattern, f)]
-    exist_records = [f.replace(base_name + '-', '').replace('.tfrecords.gz', '') for f in exist_records]
+                _token_weight = 1.0
+                file_name = os.path.basename(file_path)
+                for dash_pos in range(len(file_name)):
+                    if '_' != file_name[dash_pos]:
+                        break
+                    _token_weight *= self.dash_weight
 
-    next_index = max([int(head) if head.isdigit() else -1 for head in exist_records] + [-1]) + 1
-    file_name = os.path.join(dest_path, '{}-{}.tfrecords.gz'.format(base_name, next_index))
+                file_pars = parse_paragraphs(file_path, _token_weight)
+                print('Found {}K paragraphs in {} with token weight {}'.format(
+                    len(file_pars) // 1000, file_name, _token_weight))
+                backup.extend(file_pars)
 
-    writer_options = tf.io.TFRecordOptions(compression_type='GZIP')
-    with tf.io.TFRecordWriter(file_name, options=writer_options) as writer:
-        for doc, sps_lab, tok_lab, tok_wght, rdw_wght, sent_lab in examples_batch:
-            writer.write(_serialize_example(doc, sps_lab, tok_lab, tok_wght, rdw_wght, sent_lab))
+            for i in range(self.num_repeats):
+                paragraphs = copy.deepcopy(backup)
 
+                breaking = bool(i % 2)
+                print('Iteration: {} of {}. Breaking: {}'.format(i + 1, self.num_repeats, breaking))
 
-def process_split(paragraphs, doc_size, rec_size, num_repeats, dest_path, base_name):
-    def _bad_paragraph(paragraph):
-        # Drop bad-without-context sentences like "? hello !" and "|"
-        if len(paragraph) > 1:
-            return False
+                if breaking:
+                    paragraphs = [([s], w) for p, w in paragraphs for s in p]
 
-        sent = paragraph[0]
-        if len(sent) < 2:
-            return True
+                print('Filtering...')
+                paragraphs = good_paragraphs(paragraphs)
 
-        good_stoppers = set('.!?…')
-        text = ''.join(itertools.chain(*sent)).strip()
-        if text[0].isupper() and text[-1] in good_stoppers:
-            return False
+                print('Augmenting...')
+                paragraphs = augment_paragraphs(paragraphs)
 
-        if not re.match(r'.*\w{2,}.*', text):
-            return True
+                print('Labeling...')
+                paragraphs = label_paragraphs(paragraphs)
 
-        if text[0].isalnum() and text[-1].isalnum():
-            return True
+                print('Shuffling...')
+                np.random.shuffle(paragraphs)
 
-        amb_starters = set('-—"№«([―.•↑*@#–+©〈¶·‣►●◦')
-        if text[0] in amb_starters and text[-1] in good_stoppers:
-            return False
+                print('Baking...')
+                documents = make_documents(paragraphs, self.doc_size)
 
-        bad_starters = set('.!?,:;/_…>‼~%|\\»)]')
-        bad_stoppers = set(',•©¶·')
-        if text[0] in bad_starters or text[-1] in bad_stoppers:
-            return True
+                for j, (words, spses, toks, wghts, rdws, sents) in enumerate(documents):
+                    key = '{}_{}_{}_{}'.format(source_dir, training, i, j)
+                    wghts = [w for w in wghts if w >= 0.]
+                    yield key, {
+                        'document': ''.join(words),
+                        'length': len(wghts),
+                        'space': ''.join(spses),
+                        'token': ''.join(toks),
+                        'weight': wghts,
+                        'repdivwrap': ''.join(rdws),
+                        'sentence': ''.join(sents),
+                    }
 
-        return False
+    def _iterate_source(self, source_dir, training):
+        for dirpath, _, filenames in os.walk(source_dir):
+            for file in filenames:
+                if training == bool(re.search(self.test_re, os.path.join('/', dirpath, file))):
+                    continue
+                if not file.endswith('.conllu'):
+                    continue
 
-    paragraphs = [(p, w) for p, w in paragraphs if not _bad_paragraph(p)]
-
-    if num_repeats > 1:
-        num_breaks = num_repeats // 3
-        _breaks = []
-        if num_breaks > 0:
-            print('Breaking...')
-            _breaks = [([s], w) for p, w in paragraphs for s in p]
-            _breaks = [(p, w) for p, w in _breaks if not _bad_paragraph(p)]
-            _breaks = _breaks * num_breaks
-
-        print('Repeating...')
-        _repeats = paragraphs * (num_repeats - num_breaks)
-
-        paragraphs = _repeats + _breaks
-        del _repeats, _breaks
-
-    print('Shuffling...')
-    np.random.shuffle(paragraphs)
-
-    print('Augmenting...')
-    paragraphs = augment_paragraphs(paragraphs)
-
-    print('Shuffling...')
-    np.random.shuffle(paragraphs)
-
-    print('Labeling...')
-    paragraphs = label_paragraphs(paragraphs)
-
-    print('Baking...')
-    documents = make_documents(paragraphs, doc_size)
-    documents = label_repdivwrap(documents)
-
-    print('Writing...')
-    while len(documents):
-        todo, documents = documents[:rec_size], documents[rec_size:]
-        write_dataset(dest_path, base_name, todo)
+                yield os.path.join(dirpath, file)
 
 
-def create_dataset(src_path, dest_path, doc_size, rec_size, num_repeats, dash_weight):
-    print('Reading source files from {}'.format(src_path))
-    source_paragraphs = []
-    for file_name in os.listdir(src_path):
-        if not file_name.endswith('.conllu'):
-            continue
+def create_dataset(
+        source_dirs: Union[str, List[str]], data_dir: str, doc_size: int, dash_weight: float, num_repeats: int,
+        test_re: str) -> STBDDataset:
+    tfds.disable_progress_bar()
 
-        print('Parsing file {}'.format(file_name))
-        file_path = os.path.join(src_path, file_name)
+    builder = STBDDataset(
+        source_dirs=source_dirs, data_dir=data_dir, doc_size=doc_size, dash_weight=dash_weight,
+        num_repeats=num_repeats, test_re=test_re)
+    builder.download_and_prepare()
 
-        _token_weight = 1.0
-        for dash_pos in range(len(file_name)):
-            if '_' != file_name[dash_pos]:
-                break
-            _token_weight *= dash_weight
-
-        current_paragraphs = parse_paragraphs(file_path, _token_weight)
-        print('Found {}K paragraphs in {} with token weight {}'.format(
-            len(current_paragraphs) // 1000, file_name, _token_weight))
-
-        source_paragraphs.extend(current_paragraphs)
-    print('Finished reading. Found {}K paragraphs'.format(len(source_paragraphs) // 1000))
-
-    print('Shuffling and splitting')
-    np.random.shuffle(source_paragraphs)
-    total_size = len(source_paragraphs)
-    train_paragraphs = source_paragraphs[:int(total_size * 0.95)]
-    test_paragraphs = source_paragraphs[int(total_size * 0.95):]
-    del source_paragraphs
-
-    print('Processing train dataset')
-    process_split(train_paragraphs, doc_size, rec_size, num_repeats, dest_path, 'train')
-    del train_paragraphs
-
-    print('Processing test dataset')
-    process_split(test_paragraphs, doc_size, rec_size, num_repeats, dest_path, 'test')
-    del test_paragraphs
+    return builder
 
 
 def main():
@@ -486,21 +469,17 @@ def main():
     parser.add_argument(
         'src_path',
         type=str,
-        help='Directory with source CoNLL-U files')
+        nargs='+',
+        help='Directory with languages directories followed by CoNLL-U files')
     parser.add_argument(
         'dest_path',
         type=str,
-        help='Directory to store TFRecord files')
+        help='Directory to store composed dataset')
     parser.add_argument(
         '--doc_size',
         type=int,
         default=256,
         help='Target words count per document')
-    parser.add_argument(
-        '--rec_size',
-        type=int,
-        default=100000,
-        help='Maximum documents count per TFRecord file')
     parser.add_argument(
         '--num_repeats',
         type=int,
@@ -513,15 +492,11 @@ def main():
         help='Weight of token for files starting with underscore')
 
     argv, _ = parser.parse_known_args()
-    if not os.path.exists(argv.src_path) or not os.path.isdir(argv.src_path):
-        raise IOError('Wrong source path')
-    if os.path.exists(argv.dest_path) and not os.path.isdir(argv.dest_path):
-        raise IOError('Wrong destination path')
-    if 1 > argv.doc_size:
-        raise ValueError('Wrong document size')
-    if 1 > argv.rec_size:
-        raise ValueError('Wrong record size')
-    if 1 > argv.num_repeats:
-        raise ValueError('Wrong number of repeats')
+    for src_path in argv.src_path:
+        assert os.path.exists(src_path) and os.path.isdir(src_path), 'Wrong source path'
+    assert not os.path.exists(argv.dest_path) or os.path.isdir(argv.dest_path), 'Wrong destination path'
+    assert 0 < argv.doc_size, 'Wrong document size'
+    assert 0 < argv.num_repeats, 'Wrong number of repeats'
 
-    create_dataset(argv.src_path, argv.dest_path, argv.doc_size, argv.rec_size, argv.num_repeats, argv.dash_weight)
+    create_dataset(
+        argv.src_path, argv.dest_path, argv.doc_size, argv.dash_weight, argv.num_repeats, test_re='[-_]test\\.')

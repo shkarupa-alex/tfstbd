@@ -1,9 +1,4 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import argparse
-import json
 import os
 import tensorflow as tf
 from logging import INFO
@@ -11,25 +6,40 @@ from nlpvocab import Vocabulary
 from tensorflow_addons.optimizers import Lookahead, RectifiedAdam
 from tfmiss.keras.callbacks import LRFinder
 from tfmiss.keras.metrics import F1Binary
+from tfmiss.keras.optimizers.schedules import WarmHoldCosineCoolAnnihilateScheduler
 from .input import train_dataset
-from .hparam import build_hparams
+from .hparam import build_hparams, HParams
+from .input import train_dataset
 from .model import build_model
 
 
-def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
-    # tf.debugging.experimental.enable_dump_debug_info(
-    #     dump_root=os.path.join(model_dir, 'debug'),
-    #     tensor_debug_mode='FULL_HEALTH',
-    #     circular_buffer_size=-1)
-
+def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: int = 0, verbose: int = 1) -> dict:
     ngram_vocab = Vocabulary.load(os.path.join(data_dir, 'vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
     model = build_model(h_params, ngram_vocab)
 
+    train_ds = train_dataset(data_dir, 'train', h_params)
+    valid_ds = train_dataset(data_dir, 'test', h_params)
+
+    learn_rate = h_params.learn_rate
+    if not findlr_steps:
+        epoch_steps = 0
+        for _ in train_ds:
+            epoch_steps += 1
+        learn_rate = WarmHoldCosineCoolAnnihilateScheduler(
+            min_lr=h_params.learn_rate / 50,
+            max_lr=h_params.learn_rate,
+            warm_steps=epoch_steps * 0.5,
+            hold_steps=(h_params.num_epochs - 1) * epoch_steps * 0.3,
+            cool_steps=(h_params.num_epochs - 1) * epoch_steps * 0.7,
+            cosine_cycles=5,
+            cosine_height=0.75,
+            annih_steps=epoch_steps * 0.5)
+
     if 'ranger' == h_params.train_optim.lower():
-        optimizer = Lookahead(RectifiedAdam(h_params.learn_rate))
+        optimizer = Lookahead(RectifiedAdam(learn_rate))
     else:
         optimizer = tf.keras.optimizers.get(h_params.train_optim)
-        tf.keras.backend.set_value(optimizer.lr, h_params.learn_rate)
+        optimizer._set_hyper('learning_rate', learn_rate)
 
     model.compile(
         optimizer=optimizer,
@@ -38,69 +48,70 @@ def train_model(data_dir, h_params, model_dir, findlr_steps=0, verbose=1):
             'token': 'binary_crossentropy',
             'sentence': 'binary_crossentropy',
         },
-        # loss_weights={
-        #     'space': h_params.space_weight,
-        #     'token': h_params.token_weight,
-        #     'sentence': h_params.sentence_weight,
-        # },
         metrics={
             'space': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
             'token': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
             'sentence': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
         },
-        run_eagerly=findlr_steps > 0,
+        run_eagerly=False,
     )
     if verbose > 0:
         model.summary()
 
-    train_ds = train_dataset(os.path.join(data_dir, 'train-*.tfrecords.gz'), h_params)
-    valid_ds = train_dataset(os.path.join(data_dir, 'test-*.tfrecords.gz'), h_params)
-
-    save_options = tf.saved_model.SaveOptions(namespace_whitelist=['Miss'])
-    callbacks = [
-        tf.keras.callbacks.TensorBoard(os.path.join(model_dir, 'logs'), update_freq=100, profile_batch='20, 30'),
-        tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(model_dir, 'train'), monitor='loss', verbose=True, options=save_options)
-    ]
-    lr_finder = None if not findlr_steps else LRFinder(findlr_steps)
-    if lr_finder:
-        callbacks.append(lr_finder)
-
-    history = model.fit(
-        train_ds,
-        epochs=1 if findlr_steps > 0 else h_params.num_epochs,
-        callbacks=callbacks,
-        steps_per_epoch=findlr_steps if findlr_steps > 0 else None,
-        validation_data=valid_ds,
-        verbose=verbose
-    )
-
-    if findlr_steps > 0:
-        print(lr_finder.plot())
-        min_lr, graph_name = lr_finder.plot()
-        tf.get_logger().info('Best lr should be near: {}'.format(min_lr))
-        tf.get_logger().info('Best lr graph saved to: {}'.format(graph_name))
+    if findlr_steps:
+        lr_finder = LRFinder(findlr_steps)
+        history = model.fit(
+            train_ds,
+            callbacks=[lr_finder],
+            epochs=1,
+            steps_per_epoch=findlr_steps,
+            verbose=verbose
+        )
     else:
-        em = tf.keras.Model(inputs=model.inputs[0], outputs=model.outputs[0])
-        tf.saved_model.save(em, os.path.join(model_dir, 'export'), options=save_options)
+        lr_finder = None
+        history = model.fit(
+            train_ds,
+            validation_data=valid_ds,
+            callbacks=[
+                tf.keras.callbacks.TensorBoard(
+                    os.path.join(model_dir, 'logs'),
+                    update_freq=100,
+                    profile_batch=0),
+                tf.keras.callbacks.ModelCheckpoint(
+                    os.path.join(model_dir, 'train'),
+                    save_weights_only=True,
+                    verbose=True)
+            ],
+            epochs=h_params.num_epochs,
+            verbose=verbose
+        )
 
-    return history
+    if findlr_steps:
+        best_lr, loss_graph = lr_finder.plot()
+        tf.get_logger().info('Best lr should be near: {}'.format(best_lr))
+        tf.get_logger().info('Best lr graph saved to: {}'.format(loss_graph))
+    else:
+        save_options = tf.saved_model.SaveOptions(namespace_whitelist=['Miss'])
+        model.save(os.path.join(model_dir, 'last'), options=save_options)
+        tf.saved_model.save(model, os.path.join(model_dir, 'export'), options=save_options)
+
+    return history.history
 
 
 def main():
     parser = argparse.ArgumentParser(description='Train, evaluate and export tfdstbd model')
     parser.add_argument(
-        'params_path',
+        'hyper_params',
         type=argparse.FileType('rb'),
         help='JSON-encoded model hyperparameters file')
     parser.add_argument(
         'data_dir',
         type=str,
-        help='Directory with TFRecord files for training')
+        help='Path to dataset')
     parser.add_argument(
         'model_dir',
         type=str,
-        help='Directory to store model checkpoints')
+        help='Directory to save model')
     parser.add_argument(
         '--findlr_steps',
         type=int,
@@ -111,12 +122,10 @@ def main():
     assert os.path.exists(argv.data_dir) and os.path.isdir(argv.data_dir)
     assert not os.path.exists(argv.model_dir) or os.path.isdir(argv.model_dir)
 
-    params_path = argv.params_path.name
-    argv.params_path.close()
-
     tf.get_logger().setLevel(INFO)
 
-    with open(params_path, 'r') as f:
-        h_params = build_hparams(json.loads(f.read()))
+    params_path = argv.hyper_params.name
+    argv.params_path.close()
+    params = build_hparams(params_path)
 
-    train_model(argv.data_dir, h_params, argv.model_dir, argv.findlr_steps)
+    train_model(argv.data_dir, params, argv.model_dir, argv.findlr_steps)

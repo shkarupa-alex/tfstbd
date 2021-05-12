@@ -57,6 +57,10 @@ This is a model development part of project.
     ```bash
     tfstbd-dataset data/source/ data/dataset/
     ```
+   For multiple languages:
+    ```bash
+    tfstbd-dataset data/source/ru data/source/en data/dataset/
+    ```
 
 4. Check dataset for correctness and estimate some useful hyperparams.
 

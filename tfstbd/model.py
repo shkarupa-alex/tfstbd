@@ -1,22 +1,21 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import tensorflow as tf
+from nlpvocab import Vocabulary
 from tensorflow.keras.layers import Activation, Dense, Embedding, Lambda
 from tensorflow.keras.layers.experimental.preprocessing import StringLookup
 from tfmiss.keras.layers import AdditiveSelfAttention, MultiplicativeSelfAttention
 from tfmiss.keras.layers import CharNgams, Reduction, TemporalConvNet, ToDense, WithRagged, WordShape
-from tfmiss.text import lower_case, normalize_unicode, replace_string, split_words, zero_digits
+from tfmiss.text import split_words
+from .input import normalize_tokens
+from .hparam import HParams
 
 
-def build_model(h_params, ngram_vocab):
+def build_model(h_params: HParams, ngram_vocab: Vocabulary) -> tf.keras.Model:
     ngram_top, _ = ngram_vocab.split_by_frequency(h_params.ngram_freq)
     ngram_keys = ngram_top.tokens()
 
-    documents = tf.keras.layers.Input(shape=(), name='documents', dtype=tf.string)
+    documents = tf.keras.layers.Input(shape=(), name='document', dtype=tf.string)
     tokens = Lambda(lambda doc: split_words(doc, extended=True), name='tokens')(documents)
-    normals = Lambda(lambda tok: _normalize_tokens(tok), name='normals')(tokens)
+    normals = Lambda(lambda tok: normalize_tokens(tok), name='normals')(tokens)
 
     shapes = WordShape(WordShape.SHAPE_ALL, name='shapes')(normals)
     shapes = WithRagged(Dense(8, name='projections'))(shapes)
@@ -45,8 +44,6 @@ def build_model(h_params, ngram_vocab):
     elif 'mult' == h_params.att_core:
         features = MultiplicativeSelfAttention(dropout=h_params.att_drop, name='attention')(features)
 
-    dense_tokens = ToDense('', mask=False, name='dense_tokens')(tokens)
-
     space_head = Dense(1, name='space_logits')(features)
     space_head = Activation('sigmoid', dtype='float32', name='space')(space_head)
 
@@ -56,33 +53,19 @@ def build_model(h_params, ngram_vocab):
     sentence_head = Dense(1, name='sentence_logits')(features)
     sentence_head = Activation('sigmoid', dtype='float32', name='sentence')(sentence_head)
 
+    rdw_weight = None
     if h_params.rdw_loss:
-        rdw_weight = tf.keras.layers.Input(shape=(None,), ragged=True, name='repdivwrap', dtype=tf.float32)
+        rdw_weight = tf.keras.layers.Input(shape=(None, 1), name='repdivwrap', dtype=tf.float32)
 
+    dense_tokens = ToDense('', mask=False, name='dense_tokens')(tokens)
     model = tf.keras.Model(
-        inputs=[documents] + ([] if not h_params.rdw_loss else [rdw_weight]),
+        inputs=[documents] + ([rdw_weight] if h_params.rdw_loss else []),
         outputs=[dense_tokens, space_head, token_head, sentence_head]
     )
     if h_params.rdw_loss:
-        def _rdw(a):
-            rdw_dense = ToDense(0.0, mask=False, name='dense_tokens')(a[0])
-            rdw_diff = tf.expand_dims(rdw_dense, axis=-1) * (a[1][:, 1:, :] - a[1][:, :-1, :])
-            return tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(rdw_diff), rdw_diff)
-
-        rdw_loss = tf.keras.layers.Lambda(_rdw)([rdw_weight, token_head])
+        rdw_loss = tf.keras.layers.Lambda(
+            lambda a: tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(a[1]), a[0][:, 1:] - a[0][:, :-1], a[1])
+        )([token_head, rdw_weight])
         model.add_loss(rdw_loss)
 
     return model
-
-
-def _normalize_tokens(tokens):
-    tokens = normalize_unicode(tokens, 'NFKC')
-    tokens = replace_string(  # accentuation
-        tokens,
-        [u'\u0060', u' \u0301', u'\u02CA', u'\u02CB', u'\u0300', u'\u0301'],
-        [''] * 6
-    )
-    tokens = lower_case(tokens)
-    tokens = zero_digits(tokens)
-
-    return tokens

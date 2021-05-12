@@ -101,7 +101,6 @@ ENV/
 .mypy_cache/
 
 # this package
-sentsegm/data
 .DS_Store
 .idea/
 data/

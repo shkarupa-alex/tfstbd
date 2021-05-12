@@ -1,15 +1,19 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+import json
+import os
 from tfmiss.training import HParams
 from tensorflow.keras import optimizers as core_opt
 from tensorflow_addons import optimizers as add_opt  # Required to initialize custom optimizers
+from typing import Union
 
 
-def build_hparams(custom):
-    if not isinstance(custom, dict):
-        raise ValueError('Bad params format')
+def build_hparams(custom: Union[dict, str]) -> HParams:
+    # Create hyperparameters with overrides
+
+    if isinstance(custom, str) and os.path.isfile(custom):
+        with open(custom, 'r') as file:
+            custom = json.loads(file.read())
+
+    assert isinstance(custom, dict), 'Bad hyperparameters format'
 
     params = HParams(
         bucket_bounds=[1],
@@ -28,10 +32,10 @@ def build_hparams(custom):
         tcn_drop=0.1,
         att_core='none',  # or 'add' or 'mult'
         att_drop=0.0,
-        rdw_loss=True,
+        rdw_loss=False,
         space_weight=[1., 1.],
         token_weight=[1., 1.],
-        sentence_weight=[1., 1.],
+        sent_weight=[1., 1.],
         num_epochs=1,
         train_optim='Adam',
         learn_rate=0.05,
@@ -46,79 +50,43 @@ def build_hparams(custom):
     params.seq_core = params.seq_core.lower()
     params.att_core = params.att_core.lower()
 
-    if not all(0 < b for b in params.bucket_bounds):
-        raise ValueError('Bad "bucket_bounds" value')
-    if not all(b0 < b1 for b0, b1 in zip(params.bucket_bounds[:-1], params.bucket_bounds[1:])):
-        raise ValueError('Bad "bucket_bounds" value')
+    assert all(0 < b for b in params.bucket_bounds), 'Bad "bucket_bounds" value'
 
-    if not 0 < params.mean_samples:
-        raise ValueError('Bad "mean_samples" value')
+    bb_pairs = zip(params.bucket_bounds[:-1], params.bucket_bounds[1:])
+    assert all(b0 < b1 for b0, b1 in bb_pairs), 'Bad "bucket_bounds" value'
 
-    if not 0 < params.samples_mult:
-        raise ValueError('Bad "samples_mult" value')
-
-    if not 0 < params.ngram_minn <= params.ngram_maxn:
-        raise ValueError('Bad "ngram_minn" or "ngram_maxn" value')
-
-    if not 1 < params.ngram_freq:
-        raise ValueError('Bad "ngram_freq" value')
-
-    if not 0 < params.ngram_dim:
-        raise ValueError('Bad "ngram_dim" value')
-
-    if params.ngram_self not in {'always', 'alone'}:
-        raise ValueError('Bad "ngram_self" value')
-
-    if params.ngram_comb not in {'mean', 'sum', 'min', 'max'}:
-        raise ValueError('Bad "ngram_comb" value')
-
-    if params.seq_core not in {'lstm', 'tcn'}:
-        raise ValueError('Bad "seq_core" value')
+    assert 0 < params.mean_samples, 'Bad "mean_samples" value'
+    assert 0 < params.samples_mult, 'Bad "samples_mult" value'
+    assert 0 < params.ngram_minn <= params.ngram_maxn, 'Bad "ngram_minn" or "ngram_maxn" value'
+    assert 1 < params.ngram_freq, 'Bad "ngram_freq" value'
+    assert 0 < params.ngram_dim, 'Bad "ngram_dim" value'
+    assert params.ngram_self in {'always', 'alone'}, 'Bad "ngram_self" value'
+    assert params.ngram_comb in {'mean', 'sum', 'min', 'max'}, 'Bad "ngram_comb" value'
+    assert params.seq_core in {'lstm', 'tcn'}, 'Bad "seq_core" value'
 
     if 'lstm' == params.seq_core:
-        if not params.lstm_units:
-            raise ValueError('Bad "lstm_units" value')
-        if any(0 >= u for u in params.lstm_units):
-            raise ValueError('Bad "lstm_units" value')
-    else:
-        if not params.tcn_filters:
-            raise ValueError('Bad "tcn_filters" value')
-        if not all(0 < t for t in params.tcn_filters):
-            raise ValueError('Bad "tcn_filters" value')
+        assert params.lstm_units, 'Bad "lstm_units" value'
+        assert all(0 < u for u in params.lstm_units), 'Bad "lstm_units" value'
+    else:  # tcn
+        assert params.tcn_filters, 'Bad "tcn_filters" value'
+        assert all(0 < t for t in params.tcn_filters), 'Bad "tcn_filters" value'
 
-    if not 1 < params.tcn_ksize:
-        raise ValueError('Bad "tcn_ksize" value')
+    assert 1 < params.tcn_ksize, 'Bad "tcn_ksize" value'
+    assert 0. <= params.tcn_drop, 'Bad "tcn_drop" value'
+    assert params.att_core in {'none', 'add', 'mult'}, 'Bad "att_core" value'
+    assert 0. <= params.att_drop, 'Bad "att_drop" value'
+    assert 2 == len(params.space_weight) and all(0. < w for w in params.space_weight), 'Bad "space_weight" value'
+    assert 2 == len(params.token_weight) and all(0. < w for w in params.token_weight), 'Bad "token_weight" value'
+    assert 2 == len(params.sent_weight) and all(0. < w for w in params.sent_weight), 'Bad "sent_weight" value'
+    assert 0 < params.num_epochs, 'Bad "num_epochs" value'
+    assert len(params.train_optim), 'Bad "train_optim" value'
 
-    if not 0. <= params.tcn_drop:
-        raise ValueError('Bad "tcn_drop" value')
-
-    if params.att_core not in {'none', 'add', 'mult'}:
-        raise ValueError('Bad "att_core" value')
-
-    if not 0. <= params.att_drop:
-        raise ValueError('Bad "att_drop" value')
-
-    if 2 != len(params.space_weight) or any(0. >= w for w in params.space_weight):
-        raise ValueError('Bad "space_weight" value')
-
-    if 2 != len(params.token_weight) or any(0. >= w for w in params.token_weight):
-        raise ValueError('Bad "token_weight" value')
-
-    if 2 != len(params.sentence_weight) or any(0. >= w for w in params.sentence_weight):
-        raise ValueError('Bad "sentence_weight" value')
-
-    if not 0 < params.num_epochs:
-        raise ValueError('Bad "num_epochs" value')
-
-    if not len(params.train_optim):
-        raise ValueError('Bad "train_optim" value')
-    elif 'ranger' != params.train_optim.lower():
+    if 'ranger' != params.train_optim.lower():
         try:
             core_opt.get(params.train_optim)
         except:
-            raise ValueError('Unsupported "train_optim" value')
+            assert False, 'Unsupported "train_optim" value'
 
-    if not 0. < params.learn_rate:
-        raise ValueError('Bad "learn_rate" value')
+    assert 0. < params.learn_rate, 'Bad "learn_rate" value'
 
     return params

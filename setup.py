@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from setuptools import setup, find_packages
 
 with open('README.md', 'r') as fh:
@@ -30,7 +26,8 @@ setup(
     },
     python_requires='>=3.6.0',
     install_requires=[
-        'tensorflow>=2.4.0',
+        'tensorflow>=2.4.1',
+        'tensorflow-datasets>=4.2.0',
         'tfmiss>=0.10.0',
         'nlpvocab>=1.2.0',
         'conllu>=4.0'

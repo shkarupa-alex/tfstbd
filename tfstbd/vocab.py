@@ -1,26 +1,23 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import argparse
-import json
 import numpy as np
 import os
 import tensorflow as tf
 from nlpvocab import Vocabulary
 from tfmiss.keras.layers import CharNgams
 from .input import vocab_dataset
-from .hparam import build_hparams
+from .hparam import HParams, build_hparams
 
 
-def extract_vocab(dest_path, h_params):
-    wildcard = os.path.join(dest_path, 'train*.tfrecords.gz')
-    dataset = vocab_dataset(wildcard, h_params)
+def extract_vocab(dest_path: str, h_params: HParams) -> Vocabulary:
+    dataset = vocab_dataset(dest_path, h_params)
 
     token_vocab = Vocabulary()
+    has_examples = False
     for tokens in dataset:
+        has_examples = True
         tokens = np.char.decode(tokens.flat_values.numpy().astype('S'), 'utf-8')
         token_vocab.update(tokens)
+    assert has_examples, 'Empty dataset'
 
     ngram_vocab = Vocabulary()
     tokens = tf.constant(token_vocab.tokens(), dtype=tf.string)
@@ -41,25 +38,26 @@ def main():
     parser.add_argument(
         'hyper_params',
         type=argparse.FileType('rb'),
-        help='JSON-encoded model hyperparams file')
+        help='JSON-encoded model hyperparameters file')
     parser.add_argument(
-        'src_path',
+        'data_path',
         type=str,
-        help='Path with train TFRecord files')
+        help='Path to dataset')
 
     argv, unparsed = parser.parse_known_args()
-    if not os.path.exists(argv.src_path) or not os.path.isdir(argv.src_path):
-        raise ValueError('Wrong source path')
+    assert os.path.exists(argv.data_path) and os.path.isdir(argv.data_path), 'Wrong dataset path'
 
-    params = build_hparams(json.loads(argv.hyper_params.read()))
+    hyper_params = argv.hyper_params.name
+    argv.hyper_params.close()
+    params = build_hparams(hyper_params)
 
     print('Estimating ngram vocabulary')
-    vocab = extract_vocab(argv.src_path, params)
+    vocab = extract_vocab(argv.data_path, params)
 
-    vocab.save(os.path.join(argv.src_path, 'vocab.pkl'), Vocabulary.FORMAT_BINARY_PICKLE)
+    vocab.save(os.path.join(argv.data_path, 'vocab.pkl'), Vocabulary.FORMAT_BINARY_PICKLE)
 
     vocab['[UNK]'] = vocab[vocab.tokens()[0]] + 1
-    vocab.save(os.path.join(argv.src_path, 'vocab.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
+    vocab.save(os.path.join(argv.data_path, 'vocab.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
 
     vocab, _ = vocab.split_by_size(1000)
-    vocab.save(os.path.join(argv.src_path, 'vocab_tensorboard.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
+    vocab.save(os.path.join(argv.data_path, 'vocab_tensorboard.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
