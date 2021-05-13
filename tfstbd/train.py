@@ -125,7 +125,7 @@ def main():
     tf.get_logger().setLevel(INFO)
 
     params_path = argv.hyper_params.name
-    argv.params_path.close()
+    argv.hyper_params.close()
     params = build_hparams(params_path)
 
     train_model(argv.data_dir, params, argv.model_dir, argv.findlr_steps)
