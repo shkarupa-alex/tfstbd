@@ -9,7 +9,7 @@ from typing import Union
 def build_hparams(custom: Union[dict, str]) -> HParams:
     # Create hyperparameters with overrides
 
-    if isinstance(custom, str) and os.path.isfile(custom):
+    if isinstance(custom, str) and custom.endswith('.json') and os.path.isfile(custom):
         with open(custom, 'r') as file:
             custom = json.loads(file.read())
 

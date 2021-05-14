@@ -48,7 +48,7 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
             'token': 'binary_crossentropy',
             'sentence': 'binary_crossentropy',
         },
-        metrics={
+        weighted_metrics={
             'space': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
             'token': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
             'sentence': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
