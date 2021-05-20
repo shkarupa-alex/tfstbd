@@ -93,7 +93,8 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
     else:
         save_options = tf.saved_model.SaveOptions(namespace_whitelist=['Miss'])
         model.save(os.path.join(model_dir, 'last'), options=save_options)
-        tf.saved_model.save(model, os.path.join(model_dir, 'export'), options=save_options)
+        export = tf.keras.Model(inputs=model.inputs[:1], outputs=model.outputs)
+        tf.saved_model.save(export, os.path.join(model_dir, 'export'), options=save_options)
 
     return history.history
 
