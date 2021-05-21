@@ -87,7 +87,7 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
         )
 
     if findlr_steps:
-        best_lr, loss_graph = lr_finder.plot()
+        best_lr, loss_graph = lr_finder.plot(skip_start=50, skip_end=25)
         tf.get_logger().info('Best lr should be near: {}'.format(best_lr))
         tf.get_logger().info('Best lr graph saved to: {}'.format(loss_graph))
     else:

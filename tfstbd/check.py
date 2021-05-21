@@ -8,11 +8,11 @@ from typing import List, Tuple
 from .input import raw_dataset
 
 
-def check_dataset(data_path: str) -> Tuple[Counter, Counter, Counter, Counter, List[str]]:
+def check_dataset(data_path: str) -> Tuple[Counter, Counter, int, List[str]]:
     dataset = raw_dataset(data_path, 'train')
     dataset = dataset.concatenate(raw_dataset(data_path, 'test'))
 
-    sent_len, sps_class, tok_class, sent_class = Counter(), Counter(), Counter(), Counter()
+    sent_len, class_len, total = Counter(), Counter(), 0
     samples = []
 
     has_examples = False
@@ -24,16 +24,21 @@ def check_dataset(data_path: str) -> Tuple[Counter, Counter, Counter, Counter, L
             samples.append(''.join(words))
 
         length = row['length'].numpy().item()
-        space = row['space'].numpy()
-        token = row['token'].numpy()
+        space = row['space'].numpy().decode('utf-8')
+        token = row['token'].numpy().decode('utf-8')
         weight = row['weight'].numpy()
-        repdivwrap = row['repdivwrap'].numpy()
-        sentence = row['sentence'].numpy()
+        repdivwrap = row['repdivwrap'].numpy().decode('utf-8')
+        sentence = row['sentence'].numpy().decode('utf-8')
 
         sent_len.update([length])
-        sps_class.update(space.decode('utf-8'))
-        tok_class.update(token.decode('utf-8'))
-        sent_class.update(sentence.decode('utf-8'))
+        mean_weight = np.mean(weight).item()
+        class_len['space_T'] += space.count('T')
+        class_len['space_S'] += space.count('S')
+        class_len['token_B'] += token.count('B') * mean_weight
+        class_len['token_I'] += token.count('I') * mean_weight
+        class_len['sentence_B'] += sentence.count('B')
+        class_len['sentence_I'] += sentence.count('I')
+        total += length
 
         sizes = {len(words), length, len(space), len(token), len(weight), len(repdivwrap), len(sentence)}
         if len(sizes) > 1:
@@ -48,7 +53,7 @@ def check_dataset(data_path: str) -> Tuple[Counter, Counter, Counter, Counter, L
             raise AssertionError('Dataset check failed')
     assert has_examples, 'Empty dataset'
 
-    return sent_len, sps_class, tok_class, sent_class, samples
+    return sent_len, class_len, total, samples
 
 
 def mean_from_counter(cntr: Counter) -> float:
@@ -65,13 +70,6 @@ def mean_from_counter(cntr: Counter) -> float:
 #     return (dev / cnt) ** 0.5
 
 
-def weighted_class_balance(bincount: List[int]) -> List[float]:
-    bincount = np.array(bincount)
-    balanced = np.sum(bincount) / (len(bincount) * bincount)
-
-    return balanced.tolist()
-
-
 def main():
     parser = argparse.ArgumentParser(description='Check dataset for correct shapes')
     parser.add_argument(
@@ -82,7 +80,7 @@ def main():
     argv, _ = parser.parse_known_args()
     assert not os.path.exists(argv.data_path) or os.path.isdir(argv.data_path), 'Wrong data path'
 
-    sent_len, sps_class, tok_class, sent_class, samples = check_dataset(argv.data_path)
+    sent_len, class_len, total, samples = check_dataset(argv.data_path)
     print('Dataset checked successfully')
 
     print('Samples from dataset:')
@@ -100,10 +98,9 @@ def main():
     print('Mean samples per example: {}'.format(sent_mean))
     print('Max samples per example: {}'.format(sent_max))
 
-    sps_weights = weighted_class_balance([sps_class['T'], sps_class['S']])
-    tok_weights = weighted_class_balance([tok_class['I'], tok_class['B']])
-    sent_weights = weighted_class_balance([sent_class['I'], sent_class['B']])
+    sizes = [class_len[key] for key in ['space_T', 'space_S', 'token_I', 'token_B', 'sentence_I', 'sentence_B']]
+    balanced = (total / (len(sizes) * np.array(sizes))).tolist()
     print('\nFor better metrics use these value in your config:')
-    print('space_weight: {}'.format(sps_weights))
-    print('token_weight: {}'.format(tok_weights))
-    print('sentence_weight: {}'.format(sent_weights))
+    print('space_weight: {}'.format(balanced[0: 2]))
+    print('token_weight: {}'.format(balanced[2: 4]))
+    print('sent_weight: {}'.format(balanced[4: 6]))

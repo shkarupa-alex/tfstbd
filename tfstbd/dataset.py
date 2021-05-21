@@ -325,7 +325,7 @@ def make_documents(paragraphs: LabledParagraphs, doc_size: int) -> LabeledDocume
                 sample_words.extend(sent_words)
                 sample_spaces.extend(sent_spaces)
                 sample_tokens.extend(sent_tokens)
-                sample_weights.extend([weight] * len(sent_words))
+                sample_weights.extend([max(weight, 1.)] + [weight] * (len(sent_words) - 1))
                 sample_rediwrs.extend(sent_rediwr)
 
                 sent_breaks = ['B'] + ['I'] * (len(sent_words) - 1)
@@ -405,7 +405,7 @@ class STBDDataset(tfds.core.GeneratorBasedBuilder):
             for i in range(self.num_repeats):
                 paragraphs = copy.deepcopy(backup)
 
-                breaking = bool(i % 2)
+                breaking = bool(1 == i % 2)
                 print('Iteration: {} of {}. Breaking: {}'.format(i + 1, self.num_repeats, breaking))
 
                 if breaking:
@@ -424,7 +424,8 @@ class STBDDataset(tfds.core.GeneratorBasedBuilder):
                 np.random.shuffle(paragraphs)
 
                 print('Baking...')
-                documents = make_documents(paragraphs, self.doc_size)
+                doc_size = 1 if breaking and 1 == i % 4 else self.doc_size
+                documents = make_documents(paragraphs, doc_size)
 
                 for j, (words, spses, toks, wghts, rdws, sents) in enumerate(documents):
                     key = '{}_{}_{}_{}'.format(source_dir, training, i, j)

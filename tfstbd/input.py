@@ -50,7 +50,7 @@ def train_dataset(data_dir: str, phase: str, h_params: HParams) -> Dataset:
         }
         weight_ = examples['weight'][..., None]
         weights = {
-            'space': tf.where(labels['space'] == 0, h_params.space_weight[0], h_params.space_weight[1]) * weight_,
+            'space': tf.where(labels['space'] == 0, h_params.space_weight[0], h_params.space_weight[1]),
             'token': tf.where(labels['token'] == 0, h_params.token_weight[0], h_params.token_weight[1]) * weight_,
             'sentence': tf.where(labels['sentence'] == 0, h_params.sent_weight[0], h_params.sent_weight[1]),
         }
