@@ -151,8 +151,8 @@ class TestExtractText(tf.test.TestCase):
         ]
         sentences = parse('\n'.join(content))
         tokens = extract_text(sentences[0])
-        expected = sentences[0].metadata['text']
-        self.assertEqual(expected, ''.join(tokens))
+        expected = sentences[0].metadata['text'].strip(' ')
+        self.assertEqual(expected, ''.join(tokens).strip(' '))
 
     def test_complex_3(self):
         content = [
@@ -167,13 +167,14 @@ class TestExtractText(tf.test.TestCase):
         ]
         sentences = parse('\n'.join(content))
         tokens = extract_text(sentences[0])
-        expected = ['Она', ' ', 'мало', ' ', 'ела', '.']
+        expected = ['Она', ' ', 'мало', ' ', 'ела', '.', '\ufeff']
         self.assertListEqual(expected, tokens)
 
 
 class TestJoinText(tf.test.TestCase):
     def test_normal(self):
-        self.assertEqual('test', join_text([' ', '\u200b', ' ', '\ufeff', '\n', 'test', ' ', '\xa0']))
+        # self.assertEqual('test', join_text([' ', '\u200b', ' ', '\ufeff', '\n', 'test', ' ', '\xa0']))
+        self.assertEqual('\u200b \ufeff test \xa0', join_text([' ', '\u200b', ' ', '\ufeff', '\n', 'test', ' ', '\xa0']))
 
 
 class TestSplitSents(tf.test.TestCase):

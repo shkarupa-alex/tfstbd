@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.data import Dataset
 from tfmiss.text import lower_case, normalize_unicode, replace_string, split_chars, split_words, zero_digits
+from tfmiss.preprocessing import spaces_after
 from tfmiss.training import estimate_bucket_pipeline
 from typing import Union
 from .dataset import create_dataset
@@ -8,7 +9,7 @@ from .hparam import HParams
 
 
 def raw_dataset(data_dir: str, phase: str, h_params: Union[HParams, None] = None) -> Dataset:
-    builder = create_dataset(source_dirs=[], data_dir=data_dir, doc_size=1, dash_weight=1, num_repeats=1, test_re='')
+    builder = create_dataset(source_dirs=[], data_dir=data_dir, doc_size=1, num_repeats=1, test_re='')
     dataset = builder.as_dataset(phase)
 
     if h_params is not None and len(h_params.bucket_bounds) > 1:
@@ -26,15 +27,8 @@ def raw_dataset(data_dir: str, phase: str, h_params: Union[HParams, None] = None
 
 
 def vocab_dataset(data_dir: str, h_params: HParams) -> Dataset:
-    def _extract_tokens(examples):
-        documents = examples['document']
-        tokens = split_words(documents, extended=True)
-        normals = normalize_tokens(tokens)
-
-        return normals
-
     dataset = raw_dataset(data_dir, 'train', h_params)
-    dataset = dataset.map(_extract_tokens, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(lambda ex: parse_documents(ex['document']), num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     return dataset
@@ -43,24 +37,20 @@ def vocab_dataset(data_dir: str, h_params: HParams) -> Dataset:
 def train_dataset(data_dir: str, phase: str, h_params: HParams) -> Dataset:
     def _separate_inputs(examples):
         features = {'document': examples['document']}
-        labels = {
-            'space': tf.cast(split_chars(examples['space']) == 'S', 'int32').to_tensor(0)[..., None],
-            'token': tf.cast(split_chars(examples['token']) == 'B', 'int32').to_tensor(0)[..., None],
-            'sentence': tf.cast(split_chars(examples['sentence']) == 'B', 'int32').to_tensor(0)[..., None]
-        }
-        weight_ = examples['weight'][..., None]
-        weights = {
-            'space': tf.where(labels['space'] == 0, h_params.space_weight[0], h_params.space_weight[1]),
-            'token': tf.where(labels['token'] == 0, h_params.token_weight[0], h_params.token_weight[1]) * weight_,
-            'sentence': tf.where(labels['sentence'] == 0, h_params.sent_weight[0], h_params.sent_weight[1]),
-        }
 
-        if h_params.rdw_loss:
-            repdivwrap = split_chars(examples['repdivwrap']) != 'N'
-            repdivwrap = tf.cast(repdivwrap, 'float32').to_tensor(0.)[..., None] * weight_
-            features['repdivwrap'] = repdivwrap[:, :-1, :]
+        tokens = split_chars(examples['token']) == 'B'
+        sentences = split_chars(examples['sentence']) == 'B'
+        labels = tf.where(sentences, 2, tf.where(tokens, 1, 0))
 
-        return features, labels, weights
+        weights = tf.ones_like(labels, dtype='float32').to_tensor(0.)[..., None]
+        labels = tf.cast(labels, 'int32').to_tensor(0)[..., None]
+
+        if not h_params.crf_loss:
+            return features, labels, weights
+
+        features['label'] = labels
+
+        return features
 
     dataset = raw_dataset(data_dir, phase, h_params)
     dataset = dataset.map(_separate_inputs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -69,14 +59,20 @@ def train_dataset(data_dir: str, phase: str, h_params: HParams) -> Dataset:
     return dataset
 
 
-def normalize_tokens(tokens):
-    tokens = normalize_unicode(tokens, 'NFKC')
-    tokens = replace_string(  # accentuation
-        tokens,
-        ['\u0060', ' \u0301', '\u02CA', '\u02CB', '\u0300', '\u0301'],
-        [''] * 6
-    )
-    tokens = lower_case(tokens)
-    tokens = zero_digits(tokens)
+def parse_documents(documents, raw_tokens=False):
+    tokens = split_words(documents, extended=True)
+    tokens, spaces = spaces_after(tokens)
 
-    return tokens
+    normals = normalize_unicode(tokens, 'NFKC')
+    # normals = replace_string(  # accentuation
+    #     normals,
+    #     ['\u0060', ' \u0301', '\u02CA', '\u02CB', '\u0300', '\u0301'],
+    #     [''] * 6
+    # )
+    normals = lower_case(normals)
+    normals = zero_digits(normals)
+
+    if raw_tokens:
+        return normals, spaces, tokens
+
+    return normals, spaces

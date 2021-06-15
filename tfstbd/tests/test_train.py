@@ -20,7 +20,7 @@ class TestTrainModel(tf.test.TestCase):
     #         'mean_samples': 16,
     #         'samples_mult': 10,
     #         'ngram_minn': 2,
-    #         'ngram_maxn': 6,
+    #         'ngram_maxn': 5,
     #         'ngram_freq': 2,
     #         'lstm_units': [1]
     #     })
@@ -33,7 +33,7 @@ class TestTrainModel(tf.test.TestCase):
             'mean_samples': 16,
             'samples_mult': 10,
             'ngram_minn': 2,
-            'ngram_maxn': 6,
+            'ngram_maxn': 5,
             'ngram_freq': 2,
             'lstm_units': [1],
             'num_epochs': 100

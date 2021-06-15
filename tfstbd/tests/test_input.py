@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import tensorflow as tf
 from ..hparam import build_hparams
 from ..input import train_dataset, vocab_dataset
@@ -14,8 +15,7 @@ class TestTrainDataset(tf.test.TestCase):
             'ngram_minn': 1,
             'ngram_maxn': 1,
             'ngram_freq': 6,
-            'lstm_units': [1],
-            'rdw_loss': True
+            'lstm_units': [1]
         })
         dataset = train_dataset(data_path, 'train', params)
 
@@ -28,13 +28,11 @@ class TestTrainDataset(tf.test.TestCase):
             features, labels, weights = self.evaluate(inputs)
 
             self.assertIsInstance(features, dict)
-            self.assertEqual(['document', 'repdivwrap'], sorted(features.keys()))
+            self.assertEqual(['document'], sorted(features.keys()))
 
-            self.assertIsInstance(labels, dict)
-            self.assertEqual(['sentence', 'space', 'token'], sorted(labels.keys()))
+            self.assertIsInstance(labels, np.ndarray)
 
-            self.assertIsInstance(weights, dict)
-            self.assertEqual(['sentence', 'space', 'token'], sorted(weights.keys()))
+            self.assertIsInstance(weights, np.ndarray)
 
         self.assertTrue(has_examples)
 
@@ -55,8 +53,12 @@ class TestVocabDataset(tf.test.TestCase):
 
         has_examples = False
         for inputs in dataset.take(1):
+            self.assertIsInstance(inputs, tuple)
+            self.assertEqual(2, len(inputs))
+
             has_examples = True
-            self.assertEqual(tf.RaggedTensor, type(inputs))
+            self.assertEqual(tf.RaggedTensor, type(inputs[0]))
+            self.assertEqual(tf.RaggedTensor, type(inputs[1]))
 
         self.assertTrue(has_examples)
 

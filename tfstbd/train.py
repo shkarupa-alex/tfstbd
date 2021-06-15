@@ -14,8 +14,9 @@ from .model import build_model
 
 
 def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: int = 0, verbose: int = 1) -> dict:
-    ngram_vocab = Vocabulary.load(os.path.join(data_dir, 'vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
-    model = build_model(h_params, ngram_vocab)
+    token_vocab = Vocabulary.load(os.path.join(data_dir, 'token_vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
+    space_vocab = Vocabulary.load(os.path.join(data_dir, 'space_vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
+    model = build_model(h_params, token_vocab, space_vocab)
 
     train_ds = train_dataset(data_dir, 'train', h_params)
     valid_ds = train_dataset(data_dir, 'test', h_params)
@@ -43,16 +44,9 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
 
     model.compile(
         optimizer=optimizer,
-        loss={
-            'space': 'binary_crossentropy',
-            'token': 'binary_crossentropy',
-            'sentence': 'binary_crossentropy',
-        },
-        weighted_metrics={
-            'space': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
-            'token': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
-            'sentence': [tf.keras.metrics.BinaryAccuracy(name='accuracy'), F1Binary(name='f1')],
-        },
+        loss=[None, None, 'sparse_categorical_crossentropy', None, None],
+        weighted_metrics=[None, None, [tf.keras.metrics.CategoricalAccuracy(name='accuracy')],
+                          [F1Binary(name='f1_sent')], [F1Binary(name='f1_word')]],
         run_eagerly=False,
     )
     if verbose > 0:
@@ -93,8 +87,9 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
     else:
         save_options = tf.saved_model.SaveOptions(namespace_whitelist=['Miss'])
         model.save(os.path.join(model_dir, 'last'), options=save_options)
+
         export = tf.keras.Model(inputs=model.inputs[:1], outputs=model.outputs)
-        tf.saved_model.save(export, os.path.join(model_dir, 'export'), options=save_options)
+        export.save(os.path.join(model_dir, 'export'), options=save_options, include_optimizer=False)
 
     return history.history
 

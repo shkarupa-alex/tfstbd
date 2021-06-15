@@ -2,31 +2,42 @@ import tensorflow as tf
 from nlpvocab import Vocabulary
 from tensorflow.keras.layers import Activation, Dense, Embedding, Lambda
 from tensorflow.keras.layers.experimental.preprocessing import StringLookup
+from tensorflow_addons.layers import CRF
+from tensorflow_addons.text import crf_log_likelihood
 from tfmiss.keras.layers import AdditiveSelfAttention, MultiplicativeSelfAttention
 from tfmiss.keras.layers import CharNgams, Reduction, TemporalConvNet, ToDense, WithRagged, WordShape
 from tfmiss.text import split_words
-from .input import normalize_tokens
+from .input import parse_documents
 from .hparam import HParams
 
 
-def build_model(h_params: HParams, ngram_vocab: Vocabulary) -> tf.keras.Model:
-    ngram_top, _ = ngram_vocab.split_by_frequency(h_params.ngram_freq)
-    ngram_keys = ngram_top.tokens()
+def build_model(h_params: HParams, token_vocab: Vocabulary, space_vocab: Vocabulary) -> tf.keras.Model:
+    token_keys = token_vocab.split_by_frequency(h_params.ngram_freq)[0].tokens()
+    space_keys = space_vocab.split_by_frequency(h_params.ngram_freq)[0].tokens()
 
     documents = tf.keras.layers.Input(shape=(), name='document', dtype=tf.string)
-    tokens = Lambda(lambda doc: split_words(doc, extended=True), name='tokens')(documents)
-    normals = Lambda(lambda tok: normalize_tokens(tok), name='normals')(tokens)
+    tokens, spaces, raws = Lambda(lambda doc: parse_documents(doc, raw_tokens=True), name='parse')(documents)
 
-    shapes = WordShape(WordShape.SHAPE_ALL, name='shapes')(normals)
-    shapes = WithRagged(Dense(8, name='projections'))(shapes)
+    token_shapes = WordShape(WordShape.SHAPE_ALL, name='token_shapes')(tokens)
+    space_shapes = WordShape(WordShape.SHAPE_LENGTH_NORM, name='space_shapes')(spaces)
+    common_shapes = tf.keras.layers.concatenate([token_shapes, space_shapes], name='common_shapes')
+    common_shapes = WithRagged(Dense(4, name='shape_projections'))(common_shapes)
 
-    ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self, name='ngrams')(normals)
-    lookup = StringLookup(vocabulary=ngram_keys, mask_token=None, name='indexes')
-    indexes = lookup(ngrams)
-    embeddings = Embedding(lookup.vocab_size(), h_params.ngram_dim, name='embeddings')(indexes)
-    embeddings = Reduction(h_params.ngram_comb, name='reduction')(embeddings)
+    token_ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self, name='token_ngrams')(tokens)
+    token_lookup = StringLookup(vocabulary=token_keys, mask_token=None, name='token_indexes')
+    token_indices = token_lookup(token_ngrams)
+    token_embeddings = Embedding(
+        token_lookup.vocabulary_size(), h_params.ngram_dim, name='token_embeddings')(token_indices)
+    token_embeddings = Reduction(h_params.ngram_comb, name='token_reduction')(token_embeddings)
 
-    features = tf.keras.layers.concatenate([embeddings, shapes], name='features')
+
+    space_ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self, name='space_ngrams')(spaces)
+    space_lookup = StringLookup(vocabulary=space_keys, mask_token=None, name='space_indexes')
+    space_indices = space_lookup(space_ngrams)
+    space_embeddings = Embedding(space_lookup.vocabulary_size(), 3, name='space_embeddings')(space_indices)
+    space_embeddings = Reduction(h_params.ngram_comb, name='space_reduction')(space_embeddings)
+
+    features = tf.keras.layers.concatenate([common_shapes, token_embeddings, space_embeddings], name='features')
     features = ToDense(0.0, mask=True)(features)
 
     if 'lstm' == h_params.seq_core:
@@ -44,28 +55,31 @@ def build_model(h_params: HParams, ngram_vocab: Vocabulary) -> tf.keras.Model:
     elif 'mult' == h_params.att_core:
         features = MultiplicativeSelfAttention(dropout=h_params.att_drop, name='attention')(features)
 
-    space_head = Dense(1, name='space_logits')(features)
-    space_head = Activation('sigmoid', dtype='float32', name='space')(space_head)
+    dense_tokens = ToDense('', mask=False, name='dense_tokens')(raws)
+    dense_spaces = ToDense('', mask=False, name='dense_spaces')(spaces)
 
-    token_head = Dense(1, name='token_logits')(features)
-    token_head = Activation('sigmoid', dtype='float32', name='token')(token_head)
+    if h_params.crf_loss:
+        labels = tf.keras.layers.Input(shape=(None, 3), name='label', dtype='int32')
+        decoded, potentials, length, chain = CRF(3, name='crf')(features)
+        crf_loss = Lambda(lambda yplc: -crf_log_likelihood(*yplc)[0], name='crf_loss')([
+            labels, potentials, length, chain])
 
-    sentence_head = Dense(1, name='sentence_logits')(features)
-    sentence_head = Activation('sigmoid', dtype='float32', name='sentence')(sentence_head)
+        model = tf.keras.Model(
+            inputs=[documents, labels],
+            outputs=[dense_tokens, dense_spaces, decoded]
+        )
+        model.add_loss(crf_loss)  # TODO: reduce?
 
-    rdw_weight = None
-    if h_params.rdw_loss:
-        rdw_weight = tf.keras.layers.Input(shape=(None, 1), name='repdivwrap', dtype=tf.float32)
+    else:
+        logits = Dense(3, name='logits')(features)
+        probs = Activation('softmax', dtype='float32', name='probs')(logits)
 
-    dense_tokens = ToDense('', mask=False, name='dense_tokens')(tokens)
-    model = tf.keras.Model(
-        inputs=[documents] + ([rdw_weight] if h_params.rdw_loss else []),
-        outputs=[dense_tokens, space_head, token_head, sentence_head]
-    )
-    if h_params.rdw_loss:
-        rdw_loss = tf.keras.layers.Lambda(
-            lambda a: tf.keras.losses.MeanAbsoluteError()(tf.zeros_like(a[1]), a[0][:, 1:] - a[0][:, :-1], a[1])
-        )([token_head, rdw_weight])
-        model.add_loss(rdw_loss)
+        probs_sent = Lambda(lambda x: tf.cast(tf.argmax(x, axis=-1) == 2, 'float32')[..., None])(probs)
+        probs_word = Lambda(lambda x: tf.cast(tf.argmax(x, axis=-1) != 0, 'float32')[..., None])(probs)
+
+        model = tf.keras.Model(
+            inputs=[documents],
+            outputs=[dense_tokens, dense_spaces, probs, probs_sent, probs_word]
+        )
 
     return model

@@ -32,11 +32,8 @@ def build_hparams(custom: Union[dict, str]) -> HParams:
         tcn_drop=0.1,
         att_core='none',  # or 'add' or 'mult'
         att_drop=0.0,
-        rdw_loss=False,
-        space_weight=[1., 1.],
-        token_weight=[1., 1.],
-        sent_weight=[1., 1.],
         num_epochs=1,
+        crf_loss=False,
         train_optim='Adam',
         learn_rate=0.05,
     )
@@ -75,9 +72,6 @@ def build_hparams(custom: Union[dict, str]) -> HParams:
     assert 0. <= params.tcn_drop, 'Bad "tcn_drop" value'
     assert params.att_core in {'none', 'add', 'mult'}, 'Bad "att_core" value'
     assert 0. <= params.att_drop, 'Bad "att_drop" value'
-    assert 2 == len(params.space_weight) and all(0. < w for w in params.space_weight), 'Bad "space_weight" value'
-    assert 2 == len(params.token_weight) and all(0. < w for w in params.token_weight), 'Bad "token_weight" value'
-    assert 2 == len(params.sent_weight) and all(0. < w for w in params.sent_weight), 'Bad "sent_weight" value'
     assert 0 < params.num_epochs, 'Bad "num_epochs" value'
     assert len(params.train_optim), 'Bad "train_optim" value'
 

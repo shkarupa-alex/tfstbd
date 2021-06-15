@@ -99,7 +99,7 @@ def extract_tokens(parsed: TokenList, last_space: bool = True) -> List[Tuple[str
     return tokens
 
 
-def extract_text(parsed: TokenList, validate: bool = True, last_space: bool = False) -> List[str]:
+def extract_text(parsed: TokenList, validate: bool = True, last_space: bool = True) -> List[str]:
     # Extract text encoded in CoNLL-U tokens
     tokens = extract_tokens(parsed, last_space=last_space)
     text = itertools.chain(*tokens)
@@ -115,14 +115,7 @@ def extract_text(parsed: TokenList, validate: bool = True, last_space: bool = Fa
 
 
 def join_text(words: List[str]) -> str:
-    text = ''.join(words).replace('\n', ' ')
-
-    prev_len = len(text) + 1
-    while len(text) < prev_len:
-        prev_len = len(text)
-        text = text.strip().strip('\u200B\uFEFF').strip()
-
-    return text
+    return ''.join(words).replace('\n', ' ').strip(' ')
 
 
 def split_sents(parsed: TokenList, validate: bool = True) -> List[TokenList]:
