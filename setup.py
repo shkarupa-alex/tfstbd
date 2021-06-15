@@ -29,13 +29,10 @@ setup(
         'tensorflow>=2.5.0',
         'tensorflow-addons>=0.13.0',
         'tensorflow-datasets>=4.2.0',
-        'tfmiss>=0.10.0',
+        'tfmiss>=0.12.1',
         'nlpvocab>=1.2.0',
         'conllu>=4.0'
     ],
     setup_requires=['pytest-runner'],
-    tests_require=[
-        'pytest',
-        'ufal.udpipe>=1.2.0.1'
-    ]
+    tests_require=['pytest']
 )
