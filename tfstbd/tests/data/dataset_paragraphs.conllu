@@ -1,0 +1,107 @@
+# newdoc id = n01001
+# sent_id = n01001011
+# text = «Если передача цифровых технологий сегодня в США происходит впервые, то о мирной передаче власти такого не скажешь», – написала Кори Шульман, специальный помощник президента Обамы в своем блоге в понедельник.
+# english_text = “While much of the digital transition is unprecedented in the United States, the peaceful transition of power is not,” Obama special assistant Kori Schulman wrote in a blog post Monday.
+1	«	«	PUNCT	``	_	19	punct	_	SpaceAfter=No
+2	Если	если	SCONJ	IN	_	9	mark	_	_
+3	передача	передача	NOUN	NN	Animacy=Inan|Case=Nom|Gender=Fem|Number=Sing	9	nsubj	_	_
+4	цифровых	цифровой	ADJ	JJ	Animacy=Inan|Case=Gen|Number=Plur|Variant=Long	5	amod	_	_
+5	технологий	технология	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Plur	3	nmod	_	_
+6	сегодня	сегодня	ADV	RB	_	9	advmod	_	_
+7	в	в	ADP	IN	_	8	case	_	_
+8	США	США	PROPN	NNP	Animacy=Inan|Gender=Masc|Number=Plur	9	obl	_	_
+9	происходит	происходить	VERB	VBC	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres	19	advcl	_	_
+10	впервые	впервые	ADV	RB	_	9	advmod	_	SpaceAfter=No
+11	,	,	PUNCT	,	_	9	punct	_	_
+12	то	то	SCONJ	RB	_	19	mark	_	_
+13	о	о	ADP	IN	_	15	case	_	_
+14	мирной	мирный	ADJ	JJ	Animacy=Inan|Gender=Fem|Number=Sing|Variant=Long	15	amod	_	_
+15	передаче	передача	NOUN	NN	Animacy=Inan|Gender=Fem|Number=Sing	19	obl	_	_
+16	власти	власть	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Sing	15	nmod	_	_
+17	такого	такой	PRON	JJ	Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing	19	nsubj	_	_
+18	не	не	PART	NEG	Polarity=Neg	19	advmod	_	_
+19	скажешь	сказать	VERB	VBC	Aspect=Perf|Mood=Ind|Number=Sing|Person=2|Tense=Fut	0	root	_	SpaceAfter=No
+20	»	»	PUNCT	''	_	19	punct	_	SpaceAfter=No
+21	,	,	PUNCT	,	_	23	punct	_	_
+22	–	–	PUNCT	-	_	23	punct	_	OrigForm=--
+23	написала	написать	VERB	VBC	Aspect=Perf|Gender=Fem|Mood=Ind|Number=Sing|Tense=Past	19	parataxis	_	_
+24	Кори	Кори	PROPN	NNP	Animacy=Anim|Case=Nom|Gender=Fem|Number=Sing	23	nsubj	_	_
+25	Шульман	Шульман	PROPN	NNP	Animacy=Anim|Case=Nom|Gender=Fem|Number=Sing	24	flat:name	_	SpaceAfter=No
+26	,	,	PUNCT	,	_	28	punct	_	_
+27	специальный	специальный	ADJ	JJ	Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing|Variant=Long	28	amod	_	_
+28	помощник	помощник	NOUN	NN	Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing	24	appos	_	_
+29	президента	президент	NOUN	NN	Animacy=Anim|Case=Gen|Gender=Masc|Number=Sing	28	nmod	_	_
+30	Обамы	Обама	PROPN	NNP	Animacy=Anim|Case=Gen|Gender=Masc|Number=Sing	29	flat:name	_	_
+31	в	в	ADP	IN	_	33	case	_	_
+32	своем	свой	DET	PRP$	Gender=Masc|Number=Sing|Reflex=Yes	33	det	_	_
+33	блоге	блог	NOUN	NN	Animacy=Inan|Gender=Masc|Number=Sing	23	obl	_	_
+34	в	в	ADP	IN	_	35	case	_	_
+35	понедельник	понедельник	NOUN	NN	Animacy=Inan|Case=Acc|Gender=Masc|Number=Sing	23	obl	_	SpaceAfter=No
+36	.	.	PUNCT	.	_	19	punct	_	_
+
+# sent_id = n01001013
+# text = Для тех, кто следит за передачей всех материалов, появившихся в социальных сетях о Конгрессе, это будет происходить несколько по-другому.
+# english_text = For those who follow social media transitions on Capitol Hill, this will be a little different.
+1	Для	для	ADP	IN	_	2	case	_	_
+2	тех	тот	DET	DT	Animacy=Anim|Case=Gen|Number=Plur	20	det	_	SpaceAfter=No
+3	,	,	PUNCT	,	_	5	punct	_	_
+4	кто	кто	PRON	WP	Animacy=Anim|Case=Nom|Gender=Masc	5	nsubj	_	_
+5	следит	следить	VERB	VBC	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres	2	acl:relcl	_	_
+6	за	за	ADP	IN	_	7	case	_	_
+7	передачей	передача	NOUN	NN	Animacy=Inan|Case=Ins|Gender=Fem|Number=Sing	5	obl	_	_
+8	всех	весь	DET	DT	Animacy=Inan|Case=Gen|Number=Plur	9	det	_	_
+9	материалов	материал	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Masc|Number=Plur	7	nmod	_	SpaceAfter=No
+10	,	,	PUNCT	,	_	11	punct	_	_
+11	появившихся	появиться	VERB	VBN	Animacy=Inan|Aspect=Perf|Case=Gen|Number=Plur|Tense=Past|Variant=Long|VerbForm=Part|Voice=Act	9	acl	_	_
+12	в	в	ADP	IN	_	14	case	_	_
+13	социальных	социальный	ADJ	JJ	Animacy=Inan|Number=Plur|Variant=Long	14	amod	_	_
+14	сетях	сеть	NOUN	NN	Animacy=Inan|Gender=Fem|Number=Plur	11	obl	_	_
+15	о	о	ADP	IN	_	16	case	_	_
+16	Конгрессе	Конгресс	NOUN	NNP	Animacy=Inan|Gender=Masc|Number=Sing	11	obl	_	SpaceAfter=No
+17	,	,	PUNCT	,	_	5	punct	_	_
+18	это	это	PRON	DT	Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing	20	nsubj	_	_
+19	будет	быть	AUX	VBC	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Fut	20	aux	_	_
+20	происходить	происходить	VERB	VB	Aspect=Imp	0	root	_	_
+21	несколько	несколько	ADV	RB	_	22	advmod	_	_
+22	по-другому	по-другому	ADV	RB	_	20	advmod	_	SpaceAfter=No
+23	.	.	PUNCT	.	_	20	punct	_	_
+
+# newdoc id = n01002
+# sent_id = n01002017
+# text = Но в отступлении от риторики прошлого о сокращении иммиграции кандидат Республиканской партии заявил, что в качестве президента он позволил бы въезд «огромного количества» легальных мигрантов на основе «системы заслуг».
+# english_text = But in a break from his past rhetoric about curtailing immigration, the GOP nominee proclaimed that as president he would allow “tremendous numbers” of legal immigrants based on a “merit system.”
+1	Но	но	CCONJ	CC	_	13	cc	_	_
+2	в	в	ADP	IN	_	3	case	_	_
+3	отступлении	отступление	NOUN	NN	Animacy=Inan|Gender=Neut|Number=Sing	13	obl	_	_
+4	от	от	ADP	IN	_	5	case	_	_
+5	риторики	риторика	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Sing	3	nmod	_	_
+6	прошлого	прошлое	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing	5	nmod	_	_
+7	о	о	ADP	IN	_	8	case	_	_
+8	сокращении	сокращение	NOUN	NN	Animacy=Inan|Gender=Neut|Number=Sing	5	nmod	_	_
+9	иммиграции	иммиграция	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Sing	8	nmod	_	_
+10	кандидат	кандидат	NOUN	NN	Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing	13	nsubj	_	_
+11	Республиканской	Республиканский	ADJ	JJ	Animacy=Inan|Case=Gen|Gender=Fem|Number=Sing|Variant=Long	12	amod	_	Proper=True
+12	партии	партия	NOUN	NOUN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Sing	10	nmod	_	_
+13	заявил	заявить	VERB	VBC	Aspect=Perf|Gender=Masc|Mood=Ind|Number=Sing|Tense=Past	0	root	_	SpaceAfter=No
+14	,	,	PUNCT	,	_	20	punct	_	_
+15	что	что	SCONJ	IN	_	20	mark	_	_
+16	в	в	ADP	IN	_	18	case	_	_
+17	качестве	качество	NOUN	NN	Animacy=Inan|Gender=Neut|Number=Sing	16	fixed	_	_
+18	президента	президент	NOUN	NN	Animacy=Anim|Case=Gen|Gender=Masc|Number=Sing	20	obl	_	_
+19	он	он	PRON	PRP	Case=Nom|Gender=Masc|Number=Sing|Person=3	20	nsubj	_	_
+20	позволил	позволить	VERB	VBC	Aspect=Perf|Gender=Masc|Mood=Ind|Number=Sing|Tense=Past	13	ccomp	_	_
+21	бы	бы	PART	RP	_	20	aux	_	_
+22	въезд	въезд	NOUN	NN	Animacy=Inan|Case=Acc|Gender=Masc|Number=Sing	20	obj	_	_
+23	«	«	PUNCT	``	_	25	punct	_	SpaceAfter=No
+24	огромного	огромный	ADJ	JJ	Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing|Variant=Long	25	amod	_	_
+25	количества	количество	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing	22	nmod	_	SpaceAfter=No
+26	»	»	PUNCT	``	_	25	punct	_	_
+27	легальных	легальный	ADJ	JJ	Animacy=Anim|Case=Gen|Number=Plur|Variant=Long	28	amod	_	_
+28	мигрантов	мигрант	NOUN	NN	Animacy=Anim|Case=Gen|Gender=Masc|Number=Plur	25	nmod	_	_
+29	на	на	ADP	IN	_	30	case	_	_
+30	основе	основа	NOUN	NN	Animacy=Inan|Gender=Fem|Number=Sing	22	nmod	_	_
+31	«	«	PUNCT	``	_	32	punct	_	SpaceAfter=No
+32	системы	система	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Sing	30	nmod	_	_
+33	заслуг	заслуга	NOUN	NN	Animacy=Inan|Case=Gen|Gender=Fem|Number=Plur	32	nmod	_	SpaceAfter=No
+34	»	»	PUNCT	''	_	32	punct	_	SpaceAfter=No
+35	.	.	PUNCT	.	_	13	punct	_	_

@@ -104,6 +104,7 @@ ENV/
 .DS_Store
 .idea/
 data/
+!tfstbd/tests/data/
 model/
 models/
 export/

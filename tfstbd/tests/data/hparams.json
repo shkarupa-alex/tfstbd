@@ -1,0 +1,13 @@
+{
+  "bucket_bounds": [
+    257,
+    265
+  ],
+  "seq_core": "tcn",
+  "tcn_filters": [
+    256,
+    128,
+    64,
+    32
+  ]
+}

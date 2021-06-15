@@ -1,0 +1,44 @@
+# sent_id = 2013Algoritm.xml_6
+# text = Ранее часто писали "алгорифм", сейчас такое написание используется редко, но, тем не менее, имеет место (например, Нормальный алгорифм Маркова).
+1	Ранее	ранее	ADV	_	Degree=Pos	3	advmod	3:advmod	_
+2	часто	часто	ADV	_	Degree=Pos	3	advmod	3:advmod	_
+3	писали	писать	VERB	_	Aspect=Imp|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0	root	0:root	_
+4	"	"	PUNCT	_	_	5	punct	5:punct	SpaceAfter=No
+5	алгорифм	алгорифм	NOUN	_	Animacy=Inan|Case=Nom|Gender=Masc|Number=Sing	3	obl	3:obl	SpaceAfter=No
+6	"	"	PUNCT	_	_	5	punct	5:punct	SpaceAfter=No
+7	,	,	PUNCT	_	_	11	punct	11:punct	_
+8	сейчас	сейчас	ADV	_	Degree=Pos	11	advmod	11:advmod	_
+9	такое	такой	DET	_	Case=Nom|Gender=Neut|Number=Sing	10	det	10:det	_
+10	написание	написание	NOUN	_	Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing	11	nsubj:pass	11:nsubj:pass	_
+11	используется	использовать	VERB	_	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Pass	3	conj	3:conj	_
+12	редко	редко	ADV	_	Degree=Pos	11	advmod	11:advmod	SpaceAfter=No
+13	,	,	PUNCT	_	_	20	punct	20:punct	_
+14	но	но	CCONJ	_	_	20	cc	20:cc	SpaceAfter=No
+15	,	,	PUNCT	_	_	16	punct	16:punct	_
+16	тем	то	PRON	_	Animacy=Inan|Case=Ins|Gender=Neut|Number=Sing	20	discourse	20:discourse	_
+17	не	не	PART	_	Polarity=Neg	16	fixed	16:fixed	_
+18	менее	менее	ADV	_	Degree=Cmp	16	fixed	16:fixed	SpaceAfter=No
+19	,	,	PUNCT	_	_	16	punct	16:punct	_
+20	имеет	иметь	VERB	_	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act	3	conj	3:conj	_
+21	место	место	NOUN	_	Animacy=Inan|Case=Acc|Gender=Neut|Number=Sing	20	nsubj	20:nsubj	_
+22	(	(	PUNCT	_	_	26	punct	26:punct	SpaceAfter=No
+23	например	например	ADV	_	Degree=Pos	26	parataxis	26:parataxis	SpaceAfter=No
+24	,	,	PUNCT	_	_	23	punct	23:punct	_
+25	Нормальный	нормальный	ADJ	_	Case=Nom|Degree=Pos|Gender=Masc|Number=Sing	26	amod	26:amod	_
+26	алгорифм	алгорифм	NOUN	_	Animacy=Inan|Case=Nom|Gender=Masc|Number=Sing	20	parataxis	20:parataxis	_
+27	Маркова	Марков	PROPN	_	Animacy=Anim|Case=Gen|Gender=Masc|Number=Sing	26	nmod	26:nmod	SpaceAfter=No
+28	)	)	PUNCT	_	_	26	punct	26:punct	SpaceAfter=No
+29	.	.	PUNCT	_	_	3	punct	3:punct	_
+
+# sent_id = uppsalaBitov_1.xml_146
+# text = Кто знает, что он там думал!..
+1	Кто	кто	PRON	_	Case=Nom	2	nsubj	2:nsubj	_
+2	знает	знать	VERB	_	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act	0	root	0:root	SpaceAfter=No
+3	,	,	PUNCT	_	_	7	punct	7:punct	_
+4	что	что	PRON	_	Case=Acc	7	obj	7:obj	_
+5	он	он	PRON	_	Case=Nom|Gender=Masc|Number=Sing|Person=3	7	nsubj	7:nsubj	_
+6	там	там	ADV	_	Degree=Pos	7	advmod	7:advmod	_
+7	думал	думать	VERB	_	Aspect=Imp|Gender=Masc|Mood=Ind|Number=Sing|Tense=Past|VerbForm=Fin|Voice=Act	2	ccomp	2:ccomp	SpaceAfter=No
+8	!	!	PUNCT	_	_	7	punct	7:punct	SpaceAfter=No
+9	.	.	PUNCT	_	_	7	punct	7:punct	SpaceAfter=No
+10	.	.	PUNCT	_	_	2	punct	2:punct	_

@@ -1,0 +1,22 @@
+{
+  "description": "Sentence & token boundary detection dataset",
+  "moduleName": "tfstbd.dataset",
+  "name": "stbd_dataset",
+  "splits": [
+    {
+      "name": "test",
+      "numBytes": "1390",
+      "shardLengths": [
+        "2"
+      ]
+    },
+    {
+      "name": "train",
+      "numBytes": "538",
+      "shardLengths": [
+        "2"
+      ]
+    }
+  ],
+  "version": "1.0.0"
+}
