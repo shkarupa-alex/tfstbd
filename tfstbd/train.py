@@ -45,8 +45,7 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
     model.compile(
         optimizer=optimizer,
         loss=[None, None, 'sparse_categorical_crossentropy', None, None],
-        weighted_metrics=[None, None, [tf.keras.metrics.CategoricalAccuracy(name='accuracy')],
-                          [F1Binary(name='f1_sent')], [F1Binary(name='f1_word')]],
+        weighted_metrics=[None, None, [tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')]],
         run_eagerly=False,
     )
     if verbose > 0:

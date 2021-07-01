@@ -33,7 +33,6 @@ def build_hparams(custom: Union[dict, str]) -> HParams:
         att_core='none',  # or 'add' or 'mult'
         att_drop=0.0,
         num_epochs=1,
-        crf_loss=False,
         train_optim='Adam',
         learn_rate=0.05,
     )

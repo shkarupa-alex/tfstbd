@@ -45,12 +45,7 @@ def train_dataset(data_dir: str, phase: str, h_params: HParams) -> Dataset:
         weights = tf.ones_like(labels, dtype='float32').to_tensor(0.)[..., None]
         labels = tf.cast(labels, 'int32').to_tensor(0)[..., None]
 
-        if not h_params.crf_loss:
-            return features, labels, weights
-
-        features['label'] = labels
-
-        return features
+        return features, labels, weights
 
     dataset = raw_dataset(data_dir, phase, h_params)
     dataset = dataset.map(_separate_inputs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -64,11 +59,6 @@ def parse_documents(documents, raw_tokens=False):
     tokens, spaces = spaces_after(tokens)
 
     normals = normalize_unicode(tokens, 'NFKC')
-    # normals = replace_string(  # accentuation
-    #     normals,
-    #     ['\u0060', ' \u0301', '\u02CA', '\u02CB', '\u0300', '\u0301'],
-    #     [''] * 6
-    # )
     normals = lower_case(normals)
     normals = zero_digits(normals)
 

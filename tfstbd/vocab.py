@@ -3,7 +3,7 @@ import numpy as np
 import os
 import tensorflow as tf
 from nlpvocab import Vocabulary
-from tfmiss.keras.layers import CharNgams
+from tfmiss.keras.layers import CharNgramEmbedding
 from typing import Tuple
 from .input import vocab_dataset
 from .hparam import HParams, build_hparams
@@ -18,31 +18,20 @@ def extract_vocab(dest_path: str, h_params: HParams) -> Tuple[Vocabulary, Vocabu
     has_examples = False
     for tokens, spaces in dataset:
         has_examples = True
-        tokens = np.char.decode(tokens.flat_values.numpy().astype('S'), 'utf-8')
-        spaces = np.char.decode(spaces.flat_values.numpy().astype('S'), 'utf-8')
-        token_vocab.update(tokens)
-        space_vocab.update(spaces)
+        token_vocab.update(tokens.flat_values.numpy())
+        space_vocab.update(spaces.flat_values.numpy())
+    token_vocab = Vocabulary({w.decode('utf-8'): f for w, f in token_vocab.most_common()})
+    space_vocab = Vocabulary({w.decode('utf-8'): f for w, f in space_vocab.most_common()})
+
     assert has_examples, 'Empty dataset'
     assert 0 == token_vocab['']
     del space_vocab['']
 
-    token_ngrams = Vocabulary()
-    tokens = tf.constant(token_vocab.tokens(), dtype=tf.string)
-    ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self)(tokens)
-    for token, ngram in zip(token_vocab.tokens(), ngrams):
-        ngram = np.char.decode(ngram.numpy().astype('S'), 'utf-8').reshape([-1])
-        for n in ngram:
-            token_ngrams[n] += token_vocab[token]
-    token_ngrams, _ = token_ngrams.split_by_frequency(2)  # at least 2 occurrences
-
-    space_ngrams = Vocabulary()
-    spaces = tf.constant(space_vocab.tokens(), dtype=tf.string)
-    ngrams = CharNgams(h_params.ngram_minn, h_params.ngram_maxn, h_params.ngram_self)(spaces)
-    for space, ngram in zip(space_vocab.tokens(), ngrams):
-        ngram = np.char.decode(ngram.numpy().astype('S'), 'utf-8').reshape([-1])
-        for n in ngram:
-            space_ngrams[n] += space_vocab[space]
-    space_ngrams, _ = space_ngrams.split_by_frequency(2)  # at least 2 occurrences
+    embedder = CharNgramEmbedding(
+        vocabulary=[], output_dim=h_params.ngram_dim, minn=h_params.ngram_minn, maxn=h_params.ngram_maxn,
+        itself=h_params.ngram_self, reduction=h_params.ngram_comb, show_warning=False)
+    token_ngrams = embedder.vocab(token_vocab)
+    space_ngrams = embedder.vocab(space_vocab)
 
     return token_ngrams, space_ngrams
 

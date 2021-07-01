@@ -29,7 +29,7 @@ setup(
         'tensorflow>=2.5.0',
         'tensorflow-addons>=0.13.0',
         'tensorflow-datasets>=4.2.0',
-        'tfmiss>=0.12.2',
+        'tfmiss>=0.13.6',
         'nlpvocab>=1.2.0',
         'conllu>=4.0'
     ],
