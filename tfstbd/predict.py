@@ -124,8 +124,8 @@ class STBD:
             result.append('# sent_id = {}\n'.format(sent_hash))
             result.append('# text = {}\n'.format(sent_text))
 
-            for word, space in sentence:
-                result.append('{}\t_\t_\t_\t_\t_\t_\t_\t{}\n'.format(word, self._conllu_misc(space)))
+            for i, (word, space) in enumerate(sentence):
+                result.append('{}\t{}\t_\t_\t_\t_\t_\t_\t_\t{}\n'.format(i + 1, word, self._conllu_misc(space)))
             result.append('\n')
 
         return ''.join(result)
