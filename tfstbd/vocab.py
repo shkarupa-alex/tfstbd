@@ -33,6 +33,9 @@ def extract_vocab(dest_path: str, h_params: HParams) -> Tuple[Vocabulary, Vocabu
     token_ngrams = embedder.vocab(token_vocab)
     space_ngrams = embedder.vocab(space_vocab)
 
+    token_ngrams['[UNK]'] = token_ngrams[token_ngrams.tokens()[0]] + 1
+    space_ngrams['[UNK]'] = space_ngrams[space_ngrams.tokens()[0]] + 1
+
     return token_ngrams, space_ngrams
 
 
@@ -59,9 +62,7 @@ def main():
     token_ngram, space_ngram = extract_vocab(argv.data_path, params)
 
     token_ngram.save(os.path.join(argv.data_path, 'token_vocab.pkl'), Vocabulary.FORMAT_BINARY_PICKLE)
-    token_ngram['[UNK]'] = token_ngram[token_ngram.tokens()[0]] + 1
     token_ngram.save(os.path.join(argv.data_path, 'token_vocab.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
 
     space_ngram.save(os.path.join(argv.data_path, 'space_vocab.pkl'), Vocabulary.FORMAT_BINARY_PICKLE)
-    space_ngram['[UNK]'] = space_ngram[space_ngram.tokens()[0]] + 1
     space_ngram.save(os.path.join(argv.data_path, 'space_vocab.tsv'), Vocabulary.FORMAT_TSV_WITH_HEADERS)
