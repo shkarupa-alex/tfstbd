@@ -1,7 +1,7 @@
 import json
 import os
 from tfmiss.training import HParams
-from tensorflow.keras import optimizers as core_opt
+from keras import optimizers as core_opt
 from tensorflow_addons import optimizers as add_opt  # Required to initialize custom optimizers
 from typing import Union
 

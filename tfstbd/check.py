@@ -2,7 +2,6 @@ import argparse
 import os
 import numpy as np
 from collections import Counter
-from tfmiss.text import split_words
 from tfmiss.training import estimate_bucket_boundaries
 from typing import List, Tuple
 from .input import raw_dataset, parse_documents

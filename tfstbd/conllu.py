@@ -41,6 +41,9 @@ def extract_space(token: Token) -> str:
         return ' '
 
     if 'SpaceAfter' in token['misc']:
+        if 'Yes' == token['misc']['SpaceAfter']:
+            return ' '
+
         assert 'No' == token['misc']['SpaceAfter'], 'Wrong "SpaceAfter" value'
         return ''
 
@@ -115,7 +118,7 @@ def extract_text(parsed: TokenList, validate: bool = True, last_space: bool = Tr
 
 
 def join_text(words: List[str]) -> str:
-    return ''.join(words).replace('\n', ' ').strip(' ')
+    return ''.join(words).replace('\r', ' ').replace('\n', ' ').strip(' ')
 
 
 def split_sents(parsed: TokenList, validate: bool = True) -> List[TokenList]:

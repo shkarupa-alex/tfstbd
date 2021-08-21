@@ -36,6 +36,10 @@ def extract_vocab(dest_path: str, h_params: HParams) -> Tuple[Vocabulary, Vocabu
     token_ngrams['[UNK]'] = token_ngrams[token_ngrams.tokens()[0]] + 1
     space_ngrams['[UNK]'] = space_ngrams[space_ngrams.tokens()[0]] + 1
 
+    # char_cats = Vocabulary()
+    # char_category(inputs)
+    # char_category(inputs, first=False)
+
     return token_ngrams, space_ngrams
 
 

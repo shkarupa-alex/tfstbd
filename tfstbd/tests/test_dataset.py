@@ -75,7 +75,7 @@ class TestParseParagraphs(tf.test.TestCase):
             [
                 [('Er', ' '), ('arbeitet', ' '), ('fürs', ' '), ('FBI', ' '), ('(', ''), ('deutsch', ' '),
                  ('etwa', ''), (':', ' '), ('„', ''), ('Bundesamt', ' '), ('für', ' '), ('Ermittlung', ''),
-                 ('“', ''), (')', ''), ('.', ' ')],
+                 ('“', ''), (')', ''), ('.', ' ')]
             ],
         ], result)
 

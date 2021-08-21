@@ -2,6 +2,7 @@ import argparse
 import os
 import tensorflow as tf
 from logging import INFO
+from keras import callbacks, metrics, models, optimizers
 from nlpvocab import Vocabulary
 from tensorflow_addons.optimizers import Lookahead, RectifiedAdam
 from tfmiss.keras.callbacks import LRFinder
@@ -39,13 +40,13 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
     if 'ranger' == h_params.train_optim.lower():
         optimizer = Lookahead(RectifiedAdam(learn_rate))
     else:
-        optimizer = tf.keras.optimizers.get(h_params.train_optim)
+        optimizer = optimizers.get(h_params.train_optim)
         optimizer._set_hyper('learning_rate', learn_rate)
 
     model.compile(
         optimizer=optimizer,
         loss=[None, None, 'sparse_categorical_crossentropy', None, None],
-        weighted_metrics=[None, None, [tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')]],
+        weighted_metrics=[None, None, [metrics.SparseCategoricalAccuracy(name='accuracy')]],
         run_eagerly=False,
     )
     if verbose > 0:
@@ -66,11 +67,11 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
             train_ds,
             validation_data=valid_ds,
             callbacks=[
-                tf.keras.callbacks.TensorBoard(
+                callbacks.TensorBoard(
                     os.path.join(model_dir, 'logs'),
                     update_freq=100,
                     profile_batch=0),
-                tf.keras.callbacks.ModelCheckpoint(
+                callbacks.ModelCheckpoint(
                     os.path.join(model_dir, 'train'),
                     save_weights_only=True,
                     verbose=True)
@@ -87,7 +88,7 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
         save_options = tf.saved_model.SaveOptions(namespace_whitelist=['Miss'])
         model.save(os.path.join(model_dir, 'last'), options=save_options)
 
-        export = tf.keras.Model(inputs=model.inputs[:1], outputs=model.outputs)
+        export = models.Model(inputs=model.inputs[:1], outputs=model.outputs)
         export.save(os.path.join(model_dir, 'export'), options=save_options, include_optimizer=False)
 
     return history.history
