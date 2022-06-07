@@ -20,7 +20,7 @@ def check_dataset(data_path: str) -> Tuple[Counter, List[str]]:
             samples.append(row['document'].numpy().decode('utf-8'))
 
         has_examples = True
-        words, spaces = parse_documents(row['document'][..., None])
+        words, spaces, _ = parse_documents(row['document'][..., None])
         words, spaces = words[0], spaces[0]
         words = np.char.decode(words.numpy().reshape([-1]).astype('S'), 'utf-8')
         spaces = np.char.decode(spaces.numpy().reshape([-1]).astype('S'), 'utf-8')

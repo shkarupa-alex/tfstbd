@@ -9,43 +9,52 @@ from tfmiss.keras.callbacks import LRFinder
 from tfmiss.keras.metrics import F1Binary
 from tfmiss.keras.optimizers.schedules import WarmHoldCosineCoolAnnihilateScheduler
 from .input import train_dataset
-from .hparam import build_hparams, HParams
+from .config import build_config, Config
 from .input import train_dataset
 from .model import build_model
+from .vocab import _vocab_names
 
 
-def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: int = 0, verbose: int = 1) -> dict:
-    token_vocab = Vocabulary.load(os.path.join(data_dir, 'token_vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
-    space_vocab = Vocabulary.load(os.path.join(data_dir, 'space_vocab.pkl'), format=Vocabulary.FORMAT_BINARY_PICKLE)
-    model = build_model(h_params, token_vocab, space_vocab)
+def train_model(data_dir: str, config: Config, model_dir: str, findlr_steps: int = 0, verbose: int = 1) -> dict:
+    if config.use_jit and not findlr_steps:
+        os.environ['TF_XLA_FLAGS'] = '--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit'
+        tf.config.optimizer.set_jit('autoclustering')
 
-    train_ds = train_dataset(data_dir, 'train', h_params)
-    valid_ds = train_dataset(data_dir, 'test', h_params)
+    if config.mixed_fp16:
+        mixed_precision.set_global_policy('mixed_float16')
 
-    learn_rate = h_params.learn_rate
+    token_path, space_path = _vocab_names(data_dir, config, fmt=Vocabulary.FORMAT_BINARY_PICKLE)
+    token_vocab = Vocabulary.load(token_path, format=Vocabulary.FORMAT_BINARY_PICKLE)
+    space_vocab = Vocabulary.load(space_path, format=Vocabulary.FORMAT_BINARY_PICKLE)
+    model = build_model(config, token_vocab, space_vocab)
+
+    train_ds = train_dataset(data_dir, 'train', config)
+    valid_ds = train_dataset(data_dir, 'test', config)
+
+    learn_rate = config.learn_rate
     if not findlr_steps:
         epoch_steps = 0
         for _ in train_ds:
             epoch_steps += 1
         learn_rate = WarmHoldCosineCoolAnnihilateScheduler(
-            min_lr=h_params.learn_rate / 50,
-            max_lr=h_params.learn_rate,
+            min_lr=config.learn_rate / 50,
+            max_lr=config.learn_rate,
             warm_steps=epoch_steps * 0.5,
-            hold_steps=(h_params.num_epochs - 1) * epoch_steps * 0.3,
-            cool_steps=(h_params.num_epochs - 1) * epoch_steps * 0.7,
+            hold_steps=(config.num_epochs - 1) * epoch_steps * 0.3,
+            cool_steps=(config.num_epochs - 1) * epoch_steps * 0.7,
             cosine_cycles=5,
             cosine_height=0.75,
             annih_steps=epoch_steps * 0.5)
 
-    if 'ranger' == h_params.train_optim.lower():
+    if 'ranger' == config.train_optim.lower():
         optimizer = Lookahead(RectifiedAdam(learn_rate))
     else:
-        optimizer = optimizers.get(h_params.train_optim)
+        optimizer = optimizers.get(config.train_optim)
         optimizer._set_hyper('learning_rate', learn_rate)
 
     model.compile(
         optimizer=optimizer,
-        loss=[None, None, 'sparse_categorical_crossentropy', None, None],
+        loss=[None, None, 'sparse_categorical_crossentropy'],
         weighted_metrics=[None, None, [metrics.SparseCategoricalAccuracy(name='accuracy')]],
         run_eagerly=False,
     )
@@ -70,13 +79,13 @@ def train_model(data_dir: str, h_params: HParams, model_dir: str, findlr_steps: 
                 callbacks.TensorBoard(
                     os.path.join(model_dir, 'logs'),
                     update_freq=100,
-                    profile_batch=0),
+                    profile_batch=(100, 105)),
                 callbacks.ModelCheckpoint(
                     os.path.join(model_dir, 'train'),
                     save_weights_only=True,
                     verbose=True)
             ],
-            epochs=h_params.num_epochs,
+            epochs=config.num_epochs,
             verbose=verbose
         )
 
@@ -99,7 +108,7 @@ def main():
     parser.add_argument(
         'hyper_params',
         type=argparse.FileType('rb'),
-        help='JSON-encoded model hyperparameters file')
+        help='YAML-encoded model hyperparameters file')
     parser.add_argument(
         'data_dir',
         type=str,
@@ -122,6 +131,6 @@ def main():
 
     params_path = argv.hyper_params.name
     argv.hyper_params.close()
-    params = build_hparams(params_path)
+    config = build_config(params_path)
 
-    train_model(argv.data_dir, params, argv.model_dir, argv.findlr_steps)
+    train_model(argv.data_dir, config, argv.model_dir, argv.findlr_steps)

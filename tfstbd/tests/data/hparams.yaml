@@ -1,0 +1,9 @@
+bucket_bounds:
+  - 257
+  - 265
+seq_type: TCN
+seq_units:
+  - 256
+  - 128
+  - 64
+  - 32

@@ -1,0 +1,58 @@
+bucket_bounds:
+  - 9
+  - 17
+  - 25
+  - 33
+  - 41
+  - 49
+  - 57
+  - 65
+  - 73
+  - 81
+  - 97
+  - 113
+  - 137
+  - 161
+  - 193
+  - 233
+  - 257
+  - 265
+  - 273
+  - 281
+  - 289
+  - 313
+  - 369
+  - 441
+  - 537
+  - 641
+  - 809
+  - 1017
+  - 1257
+  - 1513
+  - 1921
+  - 2409
+  - 2993
+  - 3657
+  - 4697
+  - 5649
+  - 7081
+  - 8105
+  - 10161
+  - 11433
+  - 13041
+  - 16665
+mean_samples: 62
+samples_mult: 256
+unit_freq: 70
+ngram_minn: 3
+ngram_maxn: 5
+ngram_self: ALWAYS
+ngram_comb: MEAN
+embed_size: 256
+seq_type: LSTM
+seq_units:
+  - 192
+att_type: NONE
+num_epochs: 5
+train_optim: Adam
+learn_rate: 0.005

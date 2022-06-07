@@ -1,23 +1,23 @@
 import os
 import numpy as np
 import tensorflow as tf
-from ..hparam import build_hparams
+from ..config import build_config
 from ..input import train_dataset, vocab_dataset
 
 
 class TestTrainDataset(tf.test.TestCase):
     def test_normal(self):
         data_path = os.path.join(os.path.dirname(__file__), 'data', 'dataset')
-        params = build_hparams({
+        config = build_config({
             'bucket_bounds': [10, 20],
             'mean_samples': 16,
             'samples_mult': 10,
             'ngram_minn': 1,
             'ngram_maxn': 1,
-            'ngram_freq': 6,
-            'lstm_units': [1]
+            'unit_freq': 6,
+            'drop_reminder': False,
         })
-        dataset = train_dataset(data_path, 'train', params)
+        dataset = train_dataset(data_path, 'train', config)
 
         has_examples = False
         for inputs in dataset.take(1):
@@ -40,21 +40,21 @@ class TestTrainDataset(tf.test.TestCase):
 class TestVocabDataset(tf.test.TestCase):
     def test_normal(self):
         data_path = os.path.join(os.path.dirname(__file__), 'data', 'dataset')
-        params = build_hparams({
+        config = build_config({
             'bucket_bounds': [10, 20],
             'mean_samples': 16,
             'samples_mult': 10,
             'ngram_minn': 1,
             'ngram_maxn': 1,
-            'ngram_freq': 6,
-            'lstm_units': [1]
+            'unit_freq': 6,
+            'drop_reminder': False,
         })
-        dataset = vocab_dataset(data_path, params)
+        dataset = vocab_dataset(data_path, config)
 
         has_examples = False
         for inputs in dataset.take(1):
             self.assertIsInstance(inputs, tuple)
-            self.assertEqual(2, len(inputs))
+            self.assertEqual(3, len(inputs))
 
             has_examples = True
             self.assertEqual(tf.RaggedTensor, type(inputs[0]))

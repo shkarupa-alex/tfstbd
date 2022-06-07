@@ -44,7 +44,7 @@ def extract_space(token: Token) -> str:
         if 'Yes' == token['misc']['SpaceAfter']:
             return ' '
 
-        assert 'No' == token['misc']['SpaceAfter'], 'Wrong "SpaceAfter" value'
+        assert 'No' == token['misc']['SpaceAfter'], 'Wrong "SpaceAfter" value in {}'.format(token)
         return ''
 
     assert 'SpacesAfter' in token['misc'], 'Wrong token "misc"'
